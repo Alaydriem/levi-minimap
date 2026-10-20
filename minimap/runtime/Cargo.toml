@@ -1,0 +1,29 @@
+[package]
+name = "minimap-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+autotests = false
+
+[dependencies]
+bytemuck.workspace = true
+crossbeam-channel.workspace = true
+log.workspace = true
+minimap-core.workspace = true
+minimap-store.workspace = true
+minimap-ui.workspace = true
+png.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+zstd.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+
+[lints]
+workspace = true

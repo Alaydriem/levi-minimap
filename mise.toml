@@ -1,0 +1,95 @@
+[tasks.preflight]
+description = "Names a missing Rust toolchain or cargo-nextest before a build turns it into an obscure error"
+dir = "{{config_root}}"
+run = ["rustc --version", "cargo --version", "cargo nextest --version"]
+
+[tasks.check]
+description = "cargo check, clippy with warnings denied, and rustfmt check over the workspace"
+dir = "{{config_root}}"
+run = [
+  "cargo check --workspace --all-targets",
+  "cargo clippy --workspace --all-targets -- -D warnings",
+  "cargo fmt --all --check",
+]
+
+[tasks.test]
+description = "Every workspace test through cargo-nextest"
+dir = "{{config_root}}"
+run = "cargo nextest run --workspace"
+
+[tasks.header]
+description = "Regenerates shim/include/levi_minimap.h from the minimap-ffi crate"
+dir = "{{config_root}}"
+run = "cbindgen --config minimap/ffi/cbindgen.toml --crate minimap-ffi --output shim/include/levi_minimap.h minimap/ffi"
+
+[tasks.header-check]
+description = "Fails when shim/include/levi_minimap.h is out of date with the minimap-ffi crate"
+dir = "{{config_root}}"
+run = "cbindgen --verify --config minimap/ffi/cbindgen.toml --crate minimap-ffi --output shim/include/levi_minimap.h minimap/ffi"
+
+[tasks.build-ffi]
+description = "Builds the minimap_ffi static library in release mode"
+dir = "{{config_root}}"
+run = "cargo build --release -p minimap-ffi"
+
+[tasks.build-mod]
+description = "Builds the LeviLamina mod into shim/bin/alaydriem-minimap (a full rebuild: about 10 s)"
+depends = ["build-ffi", "header"]
+dir = "{{config_root}}/shim"
+# -r: levibuildscript 0.6.2 deletes its prelink library after each link but skips the prelink when only
+# minimap_ffi.lib changed, so an incremental relink fails with LNK1181 bedrock_runtime_api.lib
+run = ["xmake f -p windows -a x64 -m release -y", "xmake -r -y"]
+
+[tasks.install-mod]
+description = "Copies the built mod into the game mods folder named by LM_MODS_DIR (set it in mise.local.toml)"
+depends = ["build-mod"]
+dir = "{{config_root}}"
+shell = "bash -c"
+# LeviLamina finds a mod's folder from the manifest name, so the folder carries that name
+run = 'mkdir -p "${LM_MODS_DIR:?set LM_MODS_DIR in mise.local.toml}/alaydriem-minimap" && cp -r shim/bin/alaydriem-minimap/. "$LM_MODS_DIR/alaydriem-minimap/"'
+
+[tasks.e2e]
+description = "Builds and runs the C++ end-to-end harness; it also replays the synthetic walk and every capture in fixtures/"
+depends = ["build-ffi", "header"]
+dir = "{{config_root}}/e2e"
+env = { LM_E2E_CAPTURES = "{{config_root}}/target/e2e" }
+run = [
+  "cargo run -q --release -p minimap-bench --bin capture-tool -- e2e {{config_root}}/fixtures {{config_root}}/target/e2e",
+  "xmake f -p windows -a x64 -m release -y",
+  "xmake -y",
+  "xmake run lm-e2e",
+]
+
+[tasks.bench]
+description = "Criterion benches in minimap-bench against the synthetic terrain and fixtures/; arguments narrow the run"
+dir = "{{config_root}}"
+run = "cargo bench -p minimap-bench --bench minimap --"
+
+[tasks.bench-report]
+description = "Writes the saved Criterion results as target/bench/rust.csv (bench, variant, iterations, mean_ns, p50_ns, p99_ns)"
+dir = "{{config_root}}"
+run = "cargo run -q --release -p minimap-bench --bin bench-csv -- target/criterion target/bench/rust.csv"
+
+[tasks.report-bench]
+description = "Compares a saved earlier run, target/bench/before.csv, with target/bench/rust.csv as a Markdown table"
+dir = "{{config_root}}"
+run = "cargo run -q --release -p minimap-bench --bin report -- bench target/bench/before.csv target/bench/rust.csv"
+
+[tasks.report-telemetry]
+description = "Compares a saved earlier run, target/telemetry/before.csv, with target/telemetry/rust.csv (the telemetry route runbook)"
+dir = "{{config_root}}"
+run = "cargo run -q --release -p minimap-bench --bin report -- telemetry target/telemetry/before.csv target/telemetry/rust.csv"
+
+[tasks.footprint]
+description = "Prints chunk surface size, chunks per 64 MiB and region file bytes as name,value lines"
+dir = "{{config_root}}"
+run = "cargo run -q --release -p minimap-bench --bin footprint"
+
+[tasks.capture]
+description = "Prints the in-game procedure for recording a new probe capture. Runs nothing"
+dir = "{{config_root}}"
+run = "cargo run -q --release -p minimap-bench --bin capture-tool -- procedure"
+
+[tools]
+"cargo:cbindgen" = "0.29.2"
+"github:xmake-io/xmake" = "3.1.1"
