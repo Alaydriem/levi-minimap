@@ -5,4 +5,4 @@
 /shim/bin
 /e2e/build
 /e2e/.xmake
-docs/
+docs
