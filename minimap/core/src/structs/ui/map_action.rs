@@ -17,4 +17,8 @@ pub enum MapAction {
     // saves with the typed name the runtime passes in
     SaveDialog,
     CancelDialog,
+    // Escape on the world map with no menu or dialog open
+    CloseWorldMap,
+    // Ctrl+Z while the last removal can be undone
+    UndoRemove,
 }

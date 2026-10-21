@@ -1,5 +1,6 @@
 use minimap_core::services::waypoints::WaypointStore;
-use minimap_core::structs::ui::{MapAction, MenuItem, MenuTarget, UiEvent};
+use minimap_core::structs::ui::{MapAction, MenuItem, MenuTarget};
+use minimap_ui::testing::HarnessEvent;
 
 use crate::support::Scene;
 
@@ -19,8 +20,8 @@ fn open_dialog(scene: &mut Scene, target: MenuTarget) {
 
 const GROUND: MenuTarget = MenuTarget::Ground { dim: 0, x: 316, y: 71, z: -58 };
 
-fn key(code: i32) -> UiEvent {
-    UiEvent::Key { code, down: true, ctrl: false, shift: false }
+fn key(code: i32) -> HarnessEvent {
+    HarnessEvent::Key { code, down: true, ctrl: false, shift: false }
 }
 
 #[test]
@@ -28,11 +29,12 @@ fn a_name_typed_then_enter_in_one_frame_saves_the_whole_name() {
     let mut scene = Scene::new(false);
     open_dialog(&mut scene, GROUND);
 
-    let events = [UiEvent::Text('B'), UiEvent::Text('a'), UiEvent::Text('s'), UiEvent::Text('e'), key(0x0D)];
+    let events =
+        [HarnessEvent::Text('B'), HarnessEvent::Text('a'), HarnessEvent::Text('s'), HarnessEvent::Text('e'), key(0x0D)];
     scene.frame((1200.0, 700.0), false, &events);
 
     assert!(scene.actions.contains(&MapAction::SaveDialog), "{:?}", scene.actions);
-    assert_eq!(scene.runtime.drafts().name, "Base");
+    assert_eq!(scene.painter.drafts().name, "Base");
     assert!(!scene.mesh.wants_keyboard, "the keyboard goes back to the game");
 }
 
@@ -59,7 +61,7 @@ fn the_dialog_shows_its_heading_position_and_starts_from_the_waypoint_name() {
 
     assert!(new);
     assert!(scene.mesh.draws_text("Edit waypoint"));
-    assert_eq!(scene.runtime.drafts().name, "Village");
+    assert_eq!(scene.painter.drafts().name, "Village");
 }
 
 #[test]

@@ -1,11 +1,13 @@
-use egui::{Align, Align2, Area, Context, Id, Layout, Order, RichText, ScrollArea, Sense, TextEdit, Ui, pos2, vec2};
+use egui::{
+    Align, Align2, Area, Color32, Context, Id, Layout, Order, RichText, ScrollArea, Sense, TextEdit, Ui, pos2, vec2,
+};
 use minimap_core::services::ui::{WaypointDistance, WaypointFilter};
 use minimap_core::structs::ui::{MapAction, UiFrame};
 use minimap_core::structs::waypoint::Waypoint;
 
 use crate::runtime::UiDrafts;
-use crate::theme::{Icon, Metrics, StudioPalette, Typeface};
-use crate::widgets::{CardFrame, Draw, IconButton};
+use studio_ui::theme::{Icon, Metrics, StudioPalette, Typeface};
+use studio_ui::widgets::{CardFrame, Draw, IconButton};
 
 // the waypoint list under the tools card on the left: a header with the count and a close button,
 // the search field, the rows of the player's dimension and a footer hint
@@ -26,7 +28,7 @@ impl ListView {
         let top = top + Metrics::GAP_S;
         let rows_height = (ctx.content_rect().bottom() - Metrics::GAP_L - top - Self::CHROME)
             .max((Self::ROW_HEIGHT + 4.0) * Self::MIN_ROWS);
-        let area = Area::new(Id::unique("lm.list")).fixed_pos(pos2(Metrics::GAP_L, top)).order(Order::Middle);
+        let area = Area::new(Id::unique("lm.list")).fixed_pos(pos2(Metrics::GAP_L, top)).order(Order::Foreground);
         area.show(ctx, |ui| {
             CardFrame::card().show(ui, |ui| {
                 ui.set_width(Metrics::TOOLS_WIDTH - f32::from(CardFrame::PADDING) * 2.0);
@@ -46,7 +48,7 @@ impl ListView {
         ui.horizontal(|ui| {
             ui.label(RichText::new("Waypoints").font(Typeface::semibold(16.0)).color(StudioPalette::TEXT));
             let label = format!("{count} in this dimension");
-            ui.label(RichText::new(label).font(Typeface::ui(Typeface::SMALL_SIZE)).color(StudioPalette::TEXT_DIM));
+            ui.label(RichText::new(label).font(Typeface::ui(Typeface::NOTE_SIZE)).color(StudioPalette::TEXT_DIM));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if IconButton::show(ui, Icon::CLOSE, 12.0).clicked() {
                     actions.push(MapAction::ToggleList);
@@ -102,7 +104,16 @@ impl ListView {
             Draw::fill(painter, rect, Metrics::RADIUS_CONTROL, StudioPalette::BG_HOVER);
         }
         let x0 = rect.left() + 10.0;
-        painter.circle_filled(pos2(x0, rect.center().y), 6.0, StudioPalette::rgba(waypoint.colour));
+        painter.circle_filled(
+            pos2(x0, rect.center().y),
+            6.0,
+            Color32::from_rgba_unmultiplied(
+                waypoint.colour[0],
+                waypoint.colour[1],
+                waypoint.colour[2],
+                waypoint.colour[3],
+            ),
+        );
         let name = pos2(x0 + 16.0, rect.top() + 6.0);
         Draw::text(painter, name, Align2::LEFT_TOP, &waypoint.name, Typeface::body(), StudioPalette::TEXT);
         let blocks = WaypointDistance::blocks(player, (waypoint.x, waypoint.y, waypoint.z));

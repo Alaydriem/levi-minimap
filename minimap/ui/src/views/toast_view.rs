@@ -1,8 +1,8 @@
 use egui::{Align2, Context, Id, LayerId, Order, Rect, pos2, vec2};
 use minimap_core::structs::ui::{MessageKind, MessageLine};
 
-use crate::theme::{Icon, Metrics, StudioPalette, Typeface};
-use crate::widgets::Draw;
+use studio_ui::theme::{Icon, Metrics, StudioPalette, Typeface};
+use studio_ui::widgets::Draw;
 
 // the message line at the top centre, over either map: a check for something done, an info mark
 // for a note. It takes no input, so it is painted straight on a foreground layer and shows in the

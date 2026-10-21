@@ -24,7 +24,7 @@ fn shared() -> Arc<Shared> {
         BakeSettings::new(&TerrainConfig::default()),
         ViewState::new(4),
         WaypointStore::new(8, 1),
-        MapUi::new(1.0, 64),
+        MapUi::new(1.0),
     ))
 }
 
@@ -65,20 +65,27 @@ fn pixel(pixels: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
 }
 
 #[test]
-fn a_view_export_writes_the_captured_pixels_to_a_named_png_in_the_exports_folder() {
+fn a_view_export_draws_its_regions_to_a_view_named_png_in_the_exports_folder() {
     let dir = tempfile::tempdir().unwrap();
-    let service = ExportService::start(&dir.path().join(ExportService::FOLDER), shared()).unwrap();
+    let shared = shared();
+    let shown = RegionPos::new(0, 0, 0);
+    Shared::lock(&shared.tiles).insert_loaded(shown, &solid([20, 21, 22, 255]), 1, &mut Vec::new()).unwrap();
+    let regions = vec![shown, RegionPos::new(1, 0, 0)];
+    let layout = AreaLayout::new(&regions, 16384).unwrap();
+    let service = ExportService::start(&dir.path().join(ExportService::FOLDER), Arc::clone(&shared)).unwrap();
     service.enter_world("Test World");
-    let rgba: Vec<u8> = (0..4 * 2 * 4).map(|i| i as u8).collect();
-    service.export_view(rgba, 4, 2, 0).unwrap();
+
+    service.export_view(layout, regions, None, 0).unwrap();
+
     let message = result(&service);
     let file = only_file(&dir.path().join(ExportService::FOLDER));
     let name = file.file_name().unwrap().to_string_lossy().into_owned();
     assert!(name.starts_with("Test_World-overworld-") && name.ends_with("-view.png"), "{name}");
     assert_eq!(message, format!("Exported {name}"));
     let (width, height, pixels) = decode(&file);
-    assert_eq!((width, height), (4, 2));
-    assert_eq!(pixel(&pixels, 4, 1, 1), [20, 21, 22, 23]);
+    assert_eq!((width, height), (512, 256));
+    assert_eq!(pixel(&pixels, width, 1, 1), [20, 21, 22, 255]);
+    assert_eq!(pixel(&pixels, width, 300, 1), [0, 0, 0, 0]);
     service.shutdown();
 }
 
@@ -120,7 +127,9 @@ fn a_second_export_is_refused_while_one_runs_and_leaving_the_world_stops_it() {
     service.enter_world("w");
     service.export_area(layout, regions, None, 0).unwrap();
     assert!(service.is_busy());
-    assert_eq!(service.export_view(vec![0; 4], 1, 1, 0), Err("An export is already running".to_string()));
+    let one = vec![RegionPos::new(0, 0, 0)];
+    let small = AreaLayout::new(&one, 256).unwrap();
+    assert_eq!(service.export_view(small, one, None, 0), Err("An export is already running".to_string()));
     service.leave_world();
     assert_eq!(result(&service), "Export stopped: the world was left");
     assert!(!service.is_busy());
@@ -132,7 +141,9 @@ fn a_second_export_is_refused_while_one_runs_and_leaving_the_world_stops_it() {
 fn without_a_world_an_export_is_refused_with_a_reason() {
     let dir = tempfile::tempdir().unwrap();
     let service = ExportService::start(&dir.path().join(ExportService::FOLDER), shared()).unwrap();
-    assert_eq!(service.export_view(vec![0; 4], 1, 1, 0), Err("No world is open".to_string()));
+    let one = vec![RegionPos::new(0, 0, 0)];
+    let layout = AreaLayout::new(&one, 256).unwrap();
+    assert_eq!(service.export_view(layout, one, None, 0), Err("No world is open".to_string()));
     assert!(!service.is_busy());
     service.shutdown();
 }

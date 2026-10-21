@@ -39,7 +39,7 @@ impl Journal {
             }
         }
         if skipped > 0 {
-            log::warn!("{skipped} journal records in {} were skipped (unreadable or an older format)", dir.display());
+            curia::warn!("journal records were skipped: unreadable or an older format", { skipped: skipped, dir: dir.display().to_string() });
         }
         let head = head.unwrap_or(wal.len());
         Ok(Self { wal, index, head, max_bytes, scratch: Vec::new(), written: 0 })

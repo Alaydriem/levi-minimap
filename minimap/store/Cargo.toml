@@ -9,7 +9,7 @@ autotests = false
 [dependencies]
 bytemuck.workspace = true
 crossbeam-channel.workspace = true
-log.workspace = true
+curia.workspace = true
 minimap-core.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

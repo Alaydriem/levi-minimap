@@ -1,15 +1,24 @@
-use minimap_ffi::api::game::{
-    lm_biome_name, lm_block_changed, lm_key, lm_mouse, lm_staging, lm_submit_chunk, lm_submit_column, lm_text, lm_tick,
-};
+use minimap_ffi::api::game::{lm_biome_name, lm_block_changed, lm_staging, lm_submit_chunk, lm_submit_column, lm_tick};
 use minimap_ffi::api::lifecycle::lm_stats;
 use minimap_ffi::types::{
-    LmChunkPos, LmColumnSample, LmKeyResult, LmProbeRequest, LmScanPlan, LmStats, LmStatus, LmStr, LmTickInput,
+    LmChunkPos, LmColumnSample, LmProbeRequest, LmScanPlan, LmStats, LmStatus, LmStr, LmTickInput,
 };
 
 use crate::support::FfiSession;
 
 fn tick_input() -> LmTickInput {
-    LmTickInput { present: 1, foreground: 1, cursor_hidden: 1, dead: 0, x: 8.5, y: 70.0, z: 8.5, yaw: 0.0, dim: 0 }
+    LmTickInput {
+        present: 1,
+        foreground: 1,
+        cursor_hidden: 1,
+        dead: 0,
+        x: 8.5,
+        y: 70.0,
+        z: 8.5,
+        yaw: 0.0,
+        dim: 0,
+        ..LmTickInput::default()
+    }
 }
 
 fn empty_plan() -> LmScanPlan {
@@ -99,17 +108,6 @@ fn a_bad_submit_status_is_rejected() {
 }
 
 #[test]
-fn keys_and_the_wheel_go_through_the_input_rules() {
-    let session = FfiSession::new();
-    session.enter();
-    let mut result = LmKeyResult::default();
-    assert_eq!(lm_key(session.handle, 0x4D, 1, 0, 1, &mut result), LmStatus::Ok);
-    assert_eq!(result, LmKeyResult { consume: 1, action: 1 });
-    assert_eq!(lm_mouse(session.handle, 4, 1), 1);
-    assert_eq!(lm_mouse(std::ptr::null(), 4, 1), 0);
-}
-
-#[test]
 fn the_scan_plan_carries_the_block_colour_overrides_for_the_probe() {
     let session = FfiSession::new();
     session.enter();
@@ -122,14 +120,6 @@ fn the_scan_plan_carries_the_block_colour_overrides_for_the_probe() {
     let name = unsafe { std::slice::from_raw_parts(colours[0].name.ptr, colours[0].name.len) };
     assert_eq!(name, b"minecraft:lava");
     assert_eq!(colours[0].colour, u32::from_le_bytes([230, 110, 20, 255]));
-}
-
-#[test]
-fn typed_text_needs_a_live_handle() {
-    assert_eq!(lm_text(std::ptr::null(), u32::from('a')), LmStatus::InvalidArgument);
-    let session = FfiSession::new();
-    session.enter();
-    assert_eq!(lm_text(session.handle, u32::from('a')), LmStatus::Ok);
 }
 
 #[test]

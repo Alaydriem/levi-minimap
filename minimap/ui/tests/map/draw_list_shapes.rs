@@ -1,41 +1,41 @@
+use egui::epaint::Mesh;
 use minimap_core::structs::draw::{DrawCommand, DrawList, SamplerKind, TextAlign};
-use minimap_core::structs::mesh::{UiDraw, UiMesh, UiVertex};
-use minimap_ui::runtime::UiRuntime;
-use minimap_ui::theme::FontSource;
 
 use crate::support::Frames;
-
-fn mesh_of(list: &DrawList) -> UiMesh {
-    let mut runtime = UiRuntime::new(FontSource::BuiltIn);
-    let mut out = UiMesh::new();
-    Frames::run(&mut runtime, &Frames::input((0.0, 0.0), false, &[]), list, &mut out);
-    out
-}
-
-fn map_draws(mesh: &UiMesh) -> Vec<UiDraw> {
-    mesh.draws.iter().copied().filter(|d| d.kind == UiDraw::MAP).collect()
-}
-
-fn vertices_of(mesh: &UiMesh, draw: &UiDraw) -> Vec<UiVertex> {
-    let range = draw.index_offset as usize..(draw.index_offset + draw.index_count) as usize;
-    mesh.indices[range].iter().map(|&i| mesh.vertices[(draw.vertex_offset + i) as usize]).collect()
-}
 
 fn image(tex: u32) -> DrawCommand {
     DrawCommand::Image { tex, p0: (10.0, 10.0), p1: (266.0, 266.0), uv0: (0.0, 0.0), uv1: (1.0, 1.0) }
 }
 
+fn only_textured(list: &DrawList, textures: &[u32]) -> Mesh {
+    let (out, _) = Frames::paint(list, textures, 1.0);
+    let meshes: Vec<&Mesh> = out.textured().collect();
+    assert_eq!(meshes.len(), 1, "one textured mesh");
+    meshes[0].clone()
+}
+
 #[test]
-fn a_map_image_draws_with_its_texture_and_the_last_sampler() {
+fn a_map_image_draws_with_its_layer_texture() {
     let mut list = DrawList::new();
     list.push(image(3));
     list.push(DrawCommand::Sampler(SamplerKind::Linear));
     list.push(image(7));
 
-    let draws = map_draws(&mesh_of(&list));
+    let (out, layer) = Frames::paint(&list, &[3, 7], 1.0);
 
-    let samplers: Vec<(u32, u8)> = draws.iter().map(|d| (d.texture, d.sampler)).collect();
-    assert_eq!(samplers, vec![(3, UiDraw::POINT), (7, UiDraw::LINEAR)]);
+    let ids: Vec<_> = out.textured().map(|mesh| mesh.texture_id).collect();
+    assert_eq!(ids, [layer.id(3).unwrap(), layer.id(7).unwrap()]);
+}
+
+#[test]
+fn an_image_whose_texture_the_layer_does_not_hold_is_left_out() {
+    let mut list = DrawList::new();
+    list.push(image(3));
+    list.push(image(5));
+
+    let (out, _) = Frames::paint(&list, &[3], 1.0);
+
+    assert_eq!(out.textured().count(), 1);
 }
 
 #[test]
@@ -50,14 +50,11 @@ fn an_image_disc_stays_inside_its_circle() {
         angle: 0.6,
     });
 
-    let mesh = mesh_of(&list);
-    let draws = map_draws(&mesh);
+    let mesh = only_textured(&list, &[1]);
 
-    assert_eq!(draws.len(), 1);
-    let vertices = vertices_of(&mesh, &draws[0]);
-    assert!(vertices.len() / 3 >= 32);
-    assert!(vertices.iter().all(|v| ((v.x - 200.0).hypot(v.y - 200.0)) <= 100.5));
-    assert!(vertices.iter().all(|v| ((v.u - 0.5).hypot(v.v - 0.5)) <= 0.4001));
+    assert!(mesh.indices.len() / 3 >= 32);
+    assert!(mesh.vertices.iter().all(|v| ((v.pos.x - 200.0).hypot(v.pos.y - 200.0)) <= 100.5));
+    assert!(mesh.vertices.iter().all(|v| ((v.uv.x - 0.5).hypot(v.uv.y - 0.5)) <= 0.4001));
 }
 
 #[test]
@@ -72,14 +69,13 @@ fn a_turned_image_keeps_its_corner_uvs_and_turns_its_corners() {
         angle: std::f32::consts::FRAC_PI_2,
     });
 
-    let mesh = mesh_of(&list);
-    let draws = map_draws(&mesh);
-    let vertices = vertices_of(&mesh, &draws[0]);
+    let mesh = only_textured(&list, &[4]);
 
-    let corner = vertices.iter().find(|v| v.u == 0.0 && v.v == 0.0).copied().unwrap_or_default();
+    let corner = mesh.vertices.iter().find(|v| v.uv.x == 0.0 && v.uv.y == 0.0).map(|v| v.pos);
+    let corner = corner.unwrap_or_default();
     assert!((corner.x - 350.0).abs() < 0.01 && (corner.y - 200.0).abs() < 0.01, "{corner:?}");
-    for uv in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)] {
-        assert!(vertices.iter().any(|v| (v.u, v.v) == uv));
+    for (u, v) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)] {
+        assert!(mesh.vertices.iter().any(|vertex| (vertex.uv.x, vertex.uv.y) == (u, v)));
     }
 }
 
@@ -88,24 +84,20 @@ fn text_commands_are_laid_out_with_their_string() {
     let mut list = DrawList::new();
     list.text((640.0, 20.0), 0xFFFF_FFFF, 18.0, TextAlign::Centre, "12, 64, -3");
 
-    let mesh = mesh_of(&list);
+    let (out, _) = Frames::paint(&list, &[], 1.0);
 
-    let rect = mesh.text_rect("12, 64, -3").unwrap_or_default();
+    let rect = out.text_rect("12, 64, -3").unwrap_or_default();
     assert!(((rect[0] + rect[2]) * 0.5 - 640.0).abs() < 1.0 && rect[1] >= 19.0, "{rect:?}");
 }
 
 #[test]
-fn map_shapes_divide_by_the_pixels_per_point_and_come_back_in_pixels() {
+fn map_shapes_divide_physical_pixels_by_the_pixels_per_point() {
     let mut list = DrawList::new();
     list.push(image(9));
-    let mut runtime = UiRuntime::new(FontSource::BuiltIn);
-    let mut out = UiMesh::new();
-    let input =
-        minimap_core::structs::ui::UiFrameInput { pixels_per_point: 2.0, ..Frames::input((0.0, 0.0), false, &[]) };
 
-    Frames::run(&mut runtime, &input, &list, &mut out);
+    let (out, _) = Frames::paint(&list, &[9], 2.0);
 
-    let draws = map_draws(&out);
-    let xs: Vec<f32> = vertices_of(&out, &draws[0]).iter().map(|v| v.x).collect();
-    assert!(xs.iter().all(|x| (x - 10.0).abs() < 0.01 || (x - 266.0).abs() < 0.01), "{xs:?}");
+    let xs: Vec<f32> = out.textured().flat_map(|mesh| mesh.vertices.iter().map(|v| v.pos.x)).collect();
+    assert!(!xs.is_empty());
+    assert!(xs.iter().all(|x| (x - 5.0).abs() < 0.01 || (x - 133.0).abs() < 0.01), "{xs:?}");
 }

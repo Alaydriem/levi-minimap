@@ -78,9 +78,9 @@ impl BiomeKeyFile {
         match Self::decode(&bytes) {
             Ok(table) => Ok(Some(table)),
             Err(error) => {
-                log::warn!("biome key file {} is unreadable ({error}); it is renamed to .corrupt", path.display());
+                curia::warn!("biome key file is unreadable; it is renamed to .corrupt", { path: path.display().to_string(), error: error.to_string() });
                 if let Err(error) = fs::rename(path, path.with_extension("lmb.corrupt")) {
-                    log::warn!("could not rename {}: {error}", path.display());
+                    curia::warn!("could not rename a corrupt file", { path: path.display().to_string(), error: error.to_string() });
                 }
                 Ok(None)
             }

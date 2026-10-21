@@ -1,11 +1,11 @@
 use minimap_core::config::TerrainConfig;
 use minimap_core::structs::chunk::{ChunkProbe, ChunkSurface, ColumnSample};
-use minimap_core::structs::input::{KeyInput, MouseInput};
+use minimap_core::structs::input::{KeyPhase, KeybindAction, KeybindInput};
 use minimap_core::structs::pos::ChunkPos;
 use minimap_core::structs::view::PlayerSnapshot;
 use minimap_runtime::errors::CaptureError;
 use minimap_runtime::services::CaptureCodec;
-use minimap_runtime::structs::{CaptureEvent, CaptureHeader, FrameInput, SubmitStatus, TickInput};
+use minimap_runtime::structs::{CaptureEvent, CaptureHeader, SubmitStatus, TickInput};
 
 fn every_kind() -> Vec<CaptureEvent> {
     let mut surface = ChunkSurface::empty();
@@ -13,7 +13,14 @@ fn every_kind() -> Vec<CaptureEvent> {
     let player = PlayerSnapshot { present: true, x: -12.5, y: 70.0, z: 300.25, yaw: 91.0, dim: 1 };
     vec![
         CaptureEvent::Enter { dim: 1 },
-        CaptureEvent::Tick(TickInput { player, foreground: true, cursor_hidden: false, dead: false }),
+        CaptureEvent::Tick(TickInput {
+            player,
+            foreground: true,
+            cursor_hidden: false,
+            dead: false,
+            mouse_grabbed: true,
+            ..TickInput::default()
+        }),
         CaptureEvent::Submit {
             pos: ChunkPos::new(-3, 7, 1),
             status: SubmitStatus::Loaded,
@@ -31,16 +38,14 @@ fn every_kind() -> Vec<CaptureEvent> {
             sample: ColumnSample::new(1, 2, -60, -61, false, 21),
         },
         CaptureEvent::Block { x: -100, z: 2_000_000, dim: 2 },
-        CaptureEvent::Key(KeyInput::new(0x4D, true, true, false)),
-        CaptureEvent::Mouse(MouseInput::new(MouseInput::WHEEL, -120)),
-        CaptureEvent::Frame(FrameInput {
-            display: (1920.0, 1080.0),
-            dt: 0.0167,
-            cursor: (10.0, 20.0),
-            left_down: true,
-            foreground: true,
-            ..FrameInput::default()
+        CaptureEvent::Keybind(KeybindInput {
+            action: KeybindAction::ToggleCoordinates,
+            phase: KeyPhase::Repeat,
+            mouse_grabbed: false,
         }),
+        CaptureEvent::Retired(CaptureCodec::KEY),
+        CaptureEvent::Retired(CaptureCodec::MOUSE),
+        CaptureEvent::Retired(CaptureCodec::FRAME),
         CaptureEvent::Leave,
     ]
 }
@@ -107,4 +112,23 @@ fn an_overlong_biome_name_is_cut_to_the_record_size() {
     );
     let decoded = CaptureCodec::decode(bytes[0], &bytes[CaptureCodec::RECORD_HEADER_BYTES..]).unwrap();
     assert_eq!(decoded, CaptureEvent::BiomeName { id: 1, name: "x".repeat(CaptureCodec::NAME_BYTES) });
+}
+
+// captures recorded before the HCL config wrote the terrain block with camelCase keys
+#[test]
+fn a_header_with_camel_case_terrain_keys_still_reads() {
+    let json = br#"{"scanRadius":48,"enableTransparentWater":false,"shadow":{"renderStyle":0,"pcfRadius":3}}"#;
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(CaptureCodec::MAGIC);
+    bytes.extend_from_slice(&CaptureCodec::VERSION.to_le_bytes());
+    bytes.extend_from_slice(&[CaptureCodec::RAW, 0]);
+    bytes.extend_from_slice(&7u64.to_le_bytes());
+    bytes.extend_from_slice(&(json.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(json);
+
+    let (header, _) = CaptureCodec::read_header(&mut bytes.as_slice()).unwrap();
+
+    assert_eq!(header.terrain.scan_radius, 48);
+    assert!(!header.terrain.enable_transparent_water);
+    assert_eq!((header.terrain.shadow.render_style, header.terrain.shadow.pcf_radius), (0, 3));
 }

@@ -26,7 +26,7 @@ fn shared_with_chunk(pos: ChunkPos) -> Arc<Shared> {
         BakeSettings::new(&TerrainConfig::default()),
         ViewState::new(4),
         WaypointStore::new(8, 1),
-        MapUi::new(1.0, 64),
+        MapUi::new(1.0),
     ))
 }
 

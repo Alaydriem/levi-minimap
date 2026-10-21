@@ -1,8 +1,8 @@
 use minimap_core::structs::chunk::{ChunkProbe, ColumnSample};
-use minimap_core::structs::input::{KeyInput, MouseInput};
+use minimap_core::structs::input::KeybindInput;
 use minimap_core::structs::pos::ChunkPos;
 
-use crate::structs::{FrameInput, SubmitStatus, TickInput};
+use crate::structs::{SubmitStatus, TickInput};
 
 // one call from the shim into the runtime, in the order the runtime received it
 #[derive(Debug, Clone, PartialEq)]
@@ -15,7 +15,7 @@ pub enum CaptureEvent {
     BiomeName { id: u16, name: String },
     Column { pos: ChunkPos, index: u32, sample: ColumnSample },
     Block { x: i32, z: i32, dim: i32 },
-    Key(KeyInput),
-    Mouse(MouseInput),
-    Frame(FrameInput),
+    Keybind(KeybindInput),
+    // a key, mouse or frame record from before the manager drew the overlay; read and skipped
+    Retired(u8),
 }

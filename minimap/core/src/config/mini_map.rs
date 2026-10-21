@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default, rename_all = "snake_case")]
 pub struct MiniMapConfig {
     pub size_ratio: f32,
     pub radius_chunks: i32,
@@ -18,14 +18,10 @@ pub struct MiniMapConfig {
     pub line_thickness: f32,
     pub border_thickness: f32,
     pub coord_text_margin: f32,
-    pub zoom_in_key: i32,
-    pub zoom_out_key: i32,
     pub min_radius_chunks: i32,
     pub max_radius_chunks: i32,
     pub widget_scale: f32,
     pub show_coordinates: bool,
-    // with Ctrl, shows or hides the coordinates on both maps
-    pub coordinates_key: i32,
     pub show_nether_coordinates: bool,
     // turn the map so the player's facing is at the top
     pub rotate_with_player: bool,
@@ -49,13 +45,10 @@ impl Default for MiniMapConfig {
             line_thickness: 1.0,
             border_thickness: 2.0,
             coord_text_margin: 8.0,
-            zoom_in_key: 0xBB,
-            zoom_out_key: 0xBD,
             min_radius_chunks: 2,
             max_radius_chunks: 16,
             widget_scale: 1.0,
             show_coordinates: true,
-            coordinates_key: 0x4B,
             show_nether_coordinates: true,
             rotate_with_player: false,
         }

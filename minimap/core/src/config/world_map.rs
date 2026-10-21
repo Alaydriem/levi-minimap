@@ -1,9 +1,8 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default, rename_all = "snake_case")]
 pub struct WorldMapConfig {
-    pub toggle_key: i32,
     pub min_zoom: f32,
     pub max_zoom: f32,
     pub zoom_step: f32,
@@ -21,14 +20,11 @@ pub struct WorldMapConfig {
     pub show_slime_chunks: bool,
     // regions whose slime chunk masks are kept between frames
     pub slime_cache_regions: i32,
-    // keys, typed text and wheel turns held for the next UI frame; the oldest is dropped past it
-    pub ui_event_capacity: i32,
 }
 
 impl Default for WorldMapConfig {
     fn default() -> Self {
         Self {
-            toggle_key: 0x4D,
             min_zoom: 0.2,
             max_zoom: 40.0,
             zoom_step: 1.15,
@@ -42,7 +38,6 @@ impl Default for WorldMapConfig {
             show_chunk_grid: false,
             show_slime_chunks: false,
             slime_cache_regions: 1024,
-            ui_event_capacity: 64,
         }
     }
 }

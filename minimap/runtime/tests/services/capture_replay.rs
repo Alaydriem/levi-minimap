@@ -5,7 +5,7 @@ use crate::support::SyntheticWorld;
 #[test]
 fn a_recorded_session_replays_into_the_same_chunk_store() {
     let mut world = SyntheticWorld::new();
-    world.write_config(r#"{ "debug": { "captureProbes": true } }"#);
+    world.config.debug.capture_probes = true;
     let runtime = world.runtime();
     for _ in 0..40 {
         world.tick(&runtime);
@@ -17,7 +17,7 @@ fn a_recorded_session_replays_into_the_same_chunk_store() {
     let file = std::fs::read_dir(&captures).unwrap().next().unwrap().unwrap().path();
 
     let replay_world = SyntheticWorld::new();
-    let replayed = Runtime::new(replay_world.paths()).unwrap();
+    let replayed = Runtime::new(replay_world.config.clone(), replay_world.paths(), replay_world.grant).unwrap();
     let mut reader = CaptureReader::open(&file).unwrap();
     let mut replay = CaptureReplay::new(replay_world.identity());
     let applied = replay.run(&replayed, &mut reader).unwrap();

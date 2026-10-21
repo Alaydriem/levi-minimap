@@ -20,6 +20,8 @@ impl GpuResidency {
     pub const MINIMAP_TEXTURE: u32 = 1;
     const FIRST_REGION_TEXTURE: u32 = 2;
     const NO_VERSION: u64 = u64::MAX;
+    // one 256 x 256 RGBA region tile
+    pub const TILE_BYTES: usize = 256 * 256 * 4;
 
     pub fn new(budget: usize, idle_frames: u64, max_new_per_frame: usize) -> Self {
         Self {
@@ -40,6 +42,31 @@ impl GpuResidency {
 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    pub fn resident_bytes(&self) -> usize {
+        self.entries.len() * Self::TILE_BYTES
+    }
+
+    pub fn budget_bytes(&self) -> usize {
+        self.budget * Self::TILE_BYTES
+    }
+
+    pub fn budget(&self) -> usize {
+        self.budget
+    }
+
+    // releases the texture of every region whose tile is no longer in memory, drawn or not
+    pub fn release_unloaded(&mut self, is_loaded: impl Fn(RegionPos) -> bool, releases: &mut Vec<TextureOp>) {
+        let free_ids = &mut self.free_ids;
+        self.entries.retain(|region, (tex, _, _)| {
+            let keep = is_loaded(*region);
+            if !keep {
+                releases.push(TextureOp::Release { tex: *tex });
+                free_ids.push(*tex);
+            }
+            keep
+        });
     }
 
     pub fn begin_frame(&mut self, frame: u64) {

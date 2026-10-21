@@ -1,4 +1,5 @@
-use minimap_core::structs::ui::{MapAction, UiEvent};
+use minimap_core::structs::ui::MapAction;
+use minimap_ui::testing::HarnessEvent;
 
 use crate::support::Scene;
 
@@ -18,11 +19,11 @@ fn typing_in_the_search_filters_the_rows_and_holds_the_keyboard() {
     scene.settle();
     scene.click("Search waypoints");
 
-    let typed = [UiEvent::Text('i'), UiEvent::Text('r')];
+    let typed = [HarnessEvent::Text('i'), HarnessEvent::Text('r')];
     scene.frame((1200.0, 700.0), false, &typed);
     scene.frame((1200.0, 700.0), false, &[]);
 
-    assert_eq!(scene.runtime.search(), "ir");
+    assert_eq!(scene.painter.search(), "ir");
     assert!(scene.mesh.wants_keyboard);
     assert!(scene.mesh.draws_text("Iron farm"));
     assert!(!scene.mesh.draws_text("Village"));
@@ -55,7 +56,7 @@ fn a_search_with_no_match_says_so() {
     scene.settle();
     scene.click("Search waypoints");
 
-    scene.frame((1200.0, 700.0), false, &[UiEvent::Text('q')]);
+    scene.frame((1200.0, 700.0), false, &[HarnessEvent::Text('q')]);
     scene.frame((1200.0, 700.0), false, &[]);
 
     assert!(scene.mesh.draws_text("No waypoints here"));

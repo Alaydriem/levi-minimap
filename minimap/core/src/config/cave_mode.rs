@@ -1,10 +1,8 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default, rename_all = "snake_case")]
 pub struct CaveModeConfig {
-    // Win32 virtual-key code that switches between the surface and the cave view
-    pub toggle_key: i32,
     // RGBA of columns with no open space under the band top
     pub solid_color: [u8; 4],
     // blocks per band: 8, 16 or 32
@@ -17,6 +15,6 @@ pub struct CaveModeConfig {
 
 impl Default for CaveModeConfig {
     fn default() -> Self {
-        Self { toggle_key: 0x4B, solid_color: [96, 96, 96, 255], band_size: 16, band_margin: 2, scan_radius: 64 }
+        Self { solid_color: [96, 96, 96, 255], band_size: 16, band_margin: 2, scan_radius: 64 }
     }
 }

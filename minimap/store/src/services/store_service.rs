@@ -74,7 +74,7 @@ impl StoreService {
         if finished {
             let _ = worker.join();
         } else {
-            log::warn!("store worker did not finish within {timeout:?}; it is left to finish alone");
+            curia::warn!("store worker did not finish in time; it is left to finish alone", { timeout_ms: timeout.as_millis() as u64 });
         }
         ShutdownReport { finished }
     }

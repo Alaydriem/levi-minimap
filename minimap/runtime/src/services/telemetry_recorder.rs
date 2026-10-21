@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use minimap_core::services::telemetry::SampleWindow;
 
-use crate::structs::{FrameInput, RuntimeStats, TelemetryRow};
+use crate::structs::{RuntimeStats, TelemetryRow};
 
 // collects frame, tick and probe timings between telemetry rows
 pub struct TelemetryRecorder {
@@ -12,6 +12,8 @@ pub struct TelemetryRecorder {
     render_ms: SampleWindow,
     ui_build_ms: SampleWindow,
     tick_ms: SampleWindow,
+    upload_ms: SampleWindow,
+    upload_bytes: u64,
     // one tick's work: from the tick call to the last chunk the shim submitted after it, so the
     // shim's probing is included
     tick_started: Option<Instant>,
@@ -19,7 +21,6 @@ pub struct TelemetryRecorder {
     last_probe: Option<Instant>,
     probe_us_total: f64,
     chunks_probed: u64,
-    ui_vtx: u32,
     working_set_bytes: u64,
     private_bytes: u64,
     last_bakes: (u64, u64),
@@ -38,12 +39,13 @@ impl TelemetryRecorder {
             render_ms: SampleWindow::new(Self::CAPACITY),
             ui_build_ms: SampleWindow::new(Self::CAPACITY),
             tick_ms: SampleWindow::new(Self::CAPACITY),
+            upload_ms: SampleWindow::new(Self::CAPACITY),
+            upload_bytes: 0,
             tick_started: None,
             tick_end: None,
             last_probe: None,
             probe_us_total: 0.0,
             chunks_probed: 0,
-            ui_vtx: 0,
             working_set_bytes: 0,
             private_bytes: 0,
             last_bakes: (0, 0),
@@ -51,18 +53,29 @@ impl TelemetryRecorder {
         }
     }
 
-    // `ui_build_us` is the UI's own build and tessellation time for this frame
-    pub fn on_frame(&mut self, input: &FrameInput, ui_build_us: u32) {
-        if input.render_us > 0 {
-            self.render_ms.push(input.render_us as f32 / 1000.0);
+    // one layer pass: its own paint time, and the time and bytes of its texture uploads
+    pub fn on_paint(&mut self, paint_us: u32, upload_us: u32, upload_bytes: u64) {
+        if paint_us > 0 {
+            self.ui_build_ms.push(paint_us as f32 / 1000.0);
         }
-        if ui_build_us > 0 {
-            self.ui_build_ms.push(ui_build_us as f32 / 1000.0);
+        if upload_us > 0 {
+            self.upload_ms.push(upload_us as f32 / 1000.0);
         }
-        self.ui_vtx = input.ui_vtx;
-        if input.working_set_bytes > 0 {
-            self.working_set_bytes = input.working_set_bytes;
-            self.private_bytes = input.private_bytes;
+        self.upload_bytes += upload_bytes;
+    }
+
+    // the whole of this mod's work in one manager frame, as the frame handler timed it
+    pub fn on_render(&mut self, render_us: u32) {
+        if render_us > 0 {
+            self.render_ms.push(render_us as f32 / 1000.0);
+        }
+    }
+
+    // process memory as the shim sampled it; zero means not sampled
+    pub fn on_memory(&mut self, working_set_bytes: u64, private_bytes: u64) {
+        if working_set_bytes > 0 {
+            self.working_set_bytes = working_set_bytes;
+            self.private_bytes = private_bytes;
         }
     }
 
@@ -114,12 +127,20 @@ impl TelemetryRecorder {
             gpu_textures: stats.gpu_textures,
             working_set_mb: self.working_set_bytes as f32 / Self::MIB,
             private_mb: self.private_bytes as f32 / Self::MIB,
-            ui_vtx: self.ui_vtx,
+            // the manager tessellates now, so the mod has no vertex count
+            ui_vtx: 0,
             disk_write_kb: disk as f32 / 1024.0,
+            upload_ms_p50: self.upload_ms.quantile(0.5),
+            upload_ms_p99: self.upload_ms.quantile(0.99),
+            upload_kb: self.upload_bytes as f32 / 1024.0,
+            gpu_texture_mb: stats.gpu_texture_mb,
+            gpu_texture_budget_mb: stats.gpu_texture_budget_mb,
         };
         self.render_ms.clear();
         self.ui_build_ms.clear();
         self.tick_ms.clear();
+        self.upload_ms.clear();
+        self.upload_bytes = 0;
         self.probe_us_total = 0.0;
         self.chunks_probed = 0;
         self.last_bakes = bakes;

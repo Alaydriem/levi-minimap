@@ -31,7 +31,7 @@ impl FootprintReport {
         ]
     }
 
-    // the vertices ImGui builds for the list's shapes and text
+    // the vertices egui tessellates for the list's shapes and text
     pub fn vertices(draw: &DrawList) -> u64 {
         draw.commands
             .iter()

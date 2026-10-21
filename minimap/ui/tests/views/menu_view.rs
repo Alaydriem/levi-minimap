@@ -1,6 +1,6 @@
 use minimap_core::services::waypoints::WaypointStore;
 use minimap_core::structs::ui::{MapAction, MenuItem, MenuTarget};
-use minimap_ui::theme::Icon;
+use studio_ui::theme::Icon;
 
 use crate::support::Scene;
 

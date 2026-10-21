@@ -8,4 +8,9 @@ pub struct TickInput {
     pub cursor_hidden: bool,
     // the local player is dead: health 0, the death screen is up
     pub dead: bool,
+    // the game holds the mouse: no chat, menu or other screen is open
+    pub mouse_grabbed: bool,
+    // process memory, sampled by the shim
+    pub working_set_bytes: u64,
+    pub private_bytes: u64,
 }

@@ -3,9 +3,9 @@ use minimap_core::services::draw::OverlayGate;
 use minimap_core::services::ui::DimensionName;
 use minimap_core::structs::ui::{MapAction, UiFrame};
 
-use crate::theme::{Icon, Metrics, StudioPalette, Typeface};
 use crate::views::HoverView;
-use crate::widgets::{CardFrame, Draw, Toggle};
+use studio_ui::theme::{Icon, Metrics, StudioPalette, Typeface};
+use studio_ui::widgets::{CardFrame, Draw, Toggle};
 
 // the top-left card: the dimension, the overlay switches, the waypoint list switch and what is
 // under the cursor
@@ -17,7 +17,7 @@ impl ToolsView {
     // returns the card's bottom edge, where the waypoint list starts
     pub fn show(ctx: &Context, frame: &UiFrame<'_>, actions: &mut Vec<MapAction>) -> f32 {
         let area =
-            Area::new(Id::unique("lm.tools")).fixed_pos(pos2(Metrics::GAP_L, Metrics::GAP_L)).order(Order::Middle);
+            Area::new(Id::unique("lm.tools")).fixed_pos(pos2(Metrics::GAP_L, Metrics::GAP_L)).order(Order::Foreground);
         let shown = area.show(ctx, |ui| {
             CardFrame::card().show(ui, |ui| {
                 ui.set_width(Metrics::TOOLS_WIDTH - f32::from(CardFrame::PADDING) * 2.0);
@@ -50,7 +50,7 @@ impl ToolsView {
         ui.horizontal(|ui| {
             ui.label(RichText::new("World map").font(Typeface::semibold(16.0)).color(StudioPalette::TEXT));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let name = RichText::new(DimensionName::of(dim)).font(Typeface::ui(Typeface::SMALL_SIZE));
+                let name = RichText::new(DimensionName::of(dim)).font(Typeface::ui(Typeface::NOTE_SIZE));
                 ui.label(name.color(StudioPalette::TEXT_DIM));
             });
         });

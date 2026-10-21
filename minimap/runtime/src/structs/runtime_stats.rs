@@ -13,6 +13,9 @@ pub struct RuntimeStats {
     pub tile_capacity: usize,
     pub tile_overrun: usize,
     pub gpu_textures: usize,
+    // region tiles on the GPU, and the budget the setting and the manager's grant allow them
+    pub gpu_texture_mb: usize,
+    pub gpu_texture_budget_mb: usize,
     pub bake_queue: usize,
     pub outbox: usize,
     pub deferred: usize,

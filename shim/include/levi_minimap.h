@@ -17,6 +17,8 @@ typedef enum LmStatus {
   LM_STATUS_PANICKED = 2,
   LM_STATUS_NOT_IN_WORLD = 3,
   LM_STATUS_FAILED = 4,
+  LM_STATUS_MANAGER_MISSING = 5,
+  LM_STATUS_REGISTER_FAILED = 6,
 } LmStatus;
 
 typedef struct LmHandle LmHandle;
@@ -26,11 +28,14 @@ typedef struct LmTickInput {
   uint8_t foreground;
   uint8_t cursor_hidden;
   uint8_t dead;
+  uint8_t mouse_grabbed;
   float x;
   float y;
   float z;
   float yaw;
   int32_t dim;
+  uint64_t working_set_bytes;
+  uint64_t private_bytes;
 } LmTickInput;
 
 typedef struct LmChunkPos {
@@ -95,17 +100,10 @@ typedef struct LmColumnSample {
   uint16_t biome;
 } LmColumnSample;
 
-typedef struct LmKeyResult {
-  uint8_t consume;
-  uint8_t action;
-} LmKeyResult;
-
 typedef struct LmPaths {
-  struct LmStr config_file;
+  struct LmStr config_dir;
   struct LmStr data_dir;
 } LmPaths;
-
-typedef void (*LmLogFn)(uint8_t level, const uint8_t *message, uintptr_t len);
 
 typedef struct LmWorldInfo {
   struct LmStr local_dir;
@@ -132,90 +130,6 @@ typedef struct LmStats {
   uint64_t outbox;
   uint64_t deferred;
 } LmStats;
-
-typedef struct LmFrameInput {
-  float display_width;
-  float display_height;
-  float dt;
-  float cursor_x;
-  float cursor_y;
-  uint8_t left_down;
-  uint8_t foreground;
-  uint8_t right_down;
-  uint32_t render_us;
-  uint32_t ui_vtx;
-  uint64_t working_set_bytes;
-  uint64_t private_bytes;
-  uint8_t collect_text;
-} LmFrameInput;
-
-typedef struct LmTextureOp {
-  uint8_t kind;
-  uint32_t tex;
-  uint32_t width;
-  uint32_t height;
-  const uint8_t *pixels;
-  uintptr_t len;
-} LmTextureOp;
-
-typedef struct LmUiVertex {
-  float x;
-  float y;
-  float u;
-  float v;
-  uint32_t rgba;
-} LmUiVertex;
-
-typedef struct LmUiDraw {
-  float clip[4];
-  uint32_t texture;
-  uint8_t kind;
-  uint8_t sampler;
-  uint8_t reserved[2];
-  uint32_t index_offset;
-  uint32_t index_count;
-  uint32_t vertex_offset;
-} LmUiDraw;
-
-typedef struct LmUiTextureDelta {
-  uint32_t texture;
-  uint8_t full;
-  uint8_t reserved[3];
-  uint32_t x;
-  uint32_t y;
-  uint32_t width;
-  uint32_t height;
-  const uint8_t *pixels;
-  uintptr_t len;
-} LmUiTextureDelta;
-
-typedef struct LmUiText {
-  uint32_t start;
-  uint32_t len;
-  float rect[4];
-} LmUiText;
-
-typedef struct LmFrame {
-  const struct LmTextureOp *textures;
-  uint32_t texture_count;
-  const struct LmUiVertex *vertices;
-  uint32_t vertex_count;
-  const uint32_t *indices;
-  uint32_t index_count;
-  const struct LmUiDraw *draws;
-  uint32_t draw_count;
-  const struct LmUiTextureDelta *ui_textures;
-  uint32_t ui_texture_count;
-  const uint32_t *ui_freed;
-  uint32_t ui_freed_count;
-  const uint8_t *clipboard;
-  uint32_t clipboard_len;
-  const struct LmUiText *texts;
-  uint32_t text_count;
-  const uint8_t *text_bytes;
-  uint32_t text_bytes_len;
-  uint32_t cursor_flags;
-} LmFrame;
 
 #ifdef __cplusplus
 extern "C" {
@@ -246,39 +160,19 @@ uint32_t lm_resolve_void_color(const struct LmHandle *handle,
                                struct LmStr biome,
                                uint32_t fallback);
 
-enum LmStatus lm_key(const struct LmHandle *handle,
-                     int32_t code,
-                     uint8_t down,
-                     uint8_t ctrl,
-                     uint8_t mouse_grabbed,
-                     struct LmKeyResult *out);
-
-enum LmStatus lm_text(const struct LmHandle *handle, uint32_t unit);
-
-uint8_t lm_mouse(const struct LmHandle *handle, int32_t button, int32_t data);
-
 enum LmStatus lm_biome_name(const struct LmHandle *handle, uint16_t id, struct LmStr name);
 
-struct LmHandle *lm_create(const struct LmPaths *paths, LmLogFn log);
+struct LmHandle *lm_create(const struct LmPaths *paths, enum LmStatus *status);
 
 void lm_destroy(struct LmHandle *handle);
+
+void lm_log(uint8_t level, struct LmStr message);
 
 enum LmStatus lm_enter_world(const struct LmHandle *handle, const struct LmWorldInfo *info);
 
 enum LmStatus lm_leave_world(const struct LmHandle *handle);
 
 enum LmStatus lm_stats(const struct LmHandle *handle, struct LmStats *out);
-
-enum LmStatus lm_frame(const struct LmHandle *handle,
-                       const struct LmFrameInput *input,
-                       struct LmFrame *out);
-
-enum LmStatus lm_view_captured(const struct LmHandle *handle,
-                               const uint8_t *pixels,
-                               uint32_t width,
-                               uint32_t height,
-                               uint32_t stride,
-                               uint32_t format);
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -16,7 +16,6 @@ pub enum StoreCommand {
     // loads the world's biome key table, or starts a new one; answered by `StoreEvent::BiomeKeysLoaded`
     LoadBiomeKeys,
     WriteBiomeKeys { table_id: u64, names: Vec<String> },
-    WriteConfig { path: PathBuf, json: String, keep_invalid_copy: bool },
     // appends one line (a newline is added); truncate starts the file again first
     AppendLine { path: PathBuf, line: String, truncate: bool },
     Compact,

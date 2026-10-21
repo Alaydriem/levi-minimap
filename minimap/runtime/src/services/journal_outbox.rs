@@ -45,7 +45,7 @@ impl JournalOutbox {
     pub fn push(&mut self, record: JournalRecord, ack: JournalAck) {
         if self.queue.len() >= self.capacity && self.queue.pop_front().is_some() {
             self.dropped += 1;
-            log::warn!("journal outbox full: the oldest record is dropped");
+            curia::warn!("journal outbox full: the oldest record is dropped");
         }
         self.queue.push_back((Box::new(record), ack));
     }

@@ -12,6 +12,7 @@ use minimap_core::services::memory::ChunkStore;
 use minimap_core::services::scan::{ScanOutcome, ScanScheduler};
 use minimap_core::structs::bake::BakeJob;
 use minimap_core::structs::chunk::{ChunkProbe, ChunkSurface, ColumnSample, EvictedChunk};
+use minimap_core::structs::export::ViewRegions;
 use minimap_core::structs::layer::MapLayer;
 use minimap_core::structs::pos::{ChunkPos, RegionPos};
 use minimap_core::structs::tile::Tile;
@@ -145,7 +146,7 @@ impl WorldSession {
     // each biome ID is answered once per world, so this line stays rare
     pub fn biome_name(&mut self, id: u16, name: &str) {
         if name.is_empty() {
-            log::warn!("the game has no name for biome id {id}");
+            curia::warn!("the game has no name for a biome id", { id: id });
         }
         self.biomes.answer(id, name);
     }
@@ -203,6 +204,19 @@ impl WorldSession {
             return;
         }
         self.area_export = Some(self.dim);
+    }
+
+    // the regions on screen, from the tile store or the region files, at the scale that fits max_pixels
+    pub fn request_view_export(&mut self, view: ViewRegions) {
+        let regions = view.regions();
+        let message = match AreaLayout::new(&regions, self.max_export_pixels) {
+            None => "The view is too large to export".to_string(),
+            Some(layout) => match self.exports.export_view(layout, regions, self.root.clone(), view.layer) {
+                Ok(()) => format!("Exporting {} x {} pixels", layout.width, layout.height),
+                Err(message) => message,
+            },
+        };
+        Shared::lock(&self.shared.ui).show_message(message);
     }
 
     // a missing table (no readable file) starts a new one, saved on the next tick
@@ -355,7 +369,7 @@ impl WorldSession {
         if let Some((table_id, names)) = keys
             && self.store.send(StoreCommand::WriteBiomeKeys { table_id, names }).is_err()
         {
-            log::warn!("the store stopped before the biome key table was saved");
+            curia::warn!("the store stopped before the biome key table was saved");
         }
         let mut records = self.outbox.take_all();
         for evicted in std::mem::take(&mut self.evicted) {
@@ -363,13 +377,13 @@ impl WorldSession {
         }
         for record in records {
             if self.store.send(StoreCommand::Append { record, token: StoreCommand::NO_ACK }).is_err() {
-                log::warn!("the store stopped before every chunk was journaled");
+                curia::warn!("the store stopped before every chunk was journaled");
                 break;
             }
         }
         let report = self.store.shutdown(Self::SHUTDOWN);
         if !report.finished {
-            log::warn!("the store did not finish within {:?}", Self::SHUTDOWN);
+            curia::warn!("the store did not finish in time", { timeout_ms: Self::SHUTDOWN.as_millis() as u64 });
         }
         self.shared.world_epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
@@ -467,7 +481,7 @@ impl WorldSession {
                     self.requested_tiles.remove(&region);
                     let mut tiles = Shared::lock(&self.shared.tiles);
                     if let Err(error) = tiles.insert_loaded(region, &pixels, settings_hash, &mut evicted_tiles) {
-                        log::warn!("tile {region:?} not loaded: {error}");
+                        curia::warn!("tile not loaded", { x: region.x, z: region.z, layer: region.dim, error: error.to_string() });
                     }
                     if settings_hash != self.shared.settings_hash && self.near_player(region) {
                         self.rebake_regions.insert(region);
@@ -481,7 +495,7 @@ impl WorldSession {
                     }
                 }
                 StoreEvent::SurfacesLoaded { chunks, .. } => self.restores.extend(chunks),
-                StoreEvent::Failed(message) => log::warn!("store: {message}"),
+                StoreEvent::Failed(message) => curia::warn!("store command failed", { error: message }),
                 // waypoints go through the game side's store, never the session's
                 StoreEvent::WaypointsLoaded { .. } => {}
                 StoreEvent::RegionList { dim, regions } => self.on_region_list(dim, regions),

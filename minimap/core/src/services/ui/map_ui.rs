@@ -1,18 +1,16 @@
 use crate::errors::WaypointError;
+use crate::services::input::InputController;
 use crate::services::ui::DimensionName;
 use crate::services::waypoints::WaypointStore;
 use crate::structs::export::ExportKind;
-use crate::structs::input::{KeyInput, MouseInput};
 use crate::structs::ui::{
-    DialogTarget, MapAction, MapMenu, MenuItem, MenuTarget, MessageKind, MessageLine, UiEvent, UiEventQueue,
-    WaypointDialog,
+    DialogTarget, MapAction, MapMenu, MenuItem, MenuTarget, MessageKind, MessageLine, WaypointDialog,
 };
 use crate::structs::view::ViewState;
 use crate::structs::waypoint::{Waypoint, WaypointEdit, WaypointSource};
 
 // the world map's right-click menu, the waypoint dialog, the message line, the waypoint list switch
-// and the last removal. The game thread gives it keys and typed text, which it queues for the UI;
-// the render thread gives it the UI's actions
+// and the last removal; the render thread gives it the UI's actions
 pub struct MapUi {
     scale: f32,
     menu: Option<MapMenu>,
@@ -26,23 +24,14 @@ pub struct MapUi {
     waypoints_shown: bool,
     // an export chosen from the menu, until the runtime takes it
     export: Option<ExportKind>,
-    // the first half of a UTF-16 surrogate pair, until the second arrives
-    high_surrogate: Option<u32>,
     // the world map's waypoint list is shown
     list_open: bool,
-    // keys, text and wheel turns for the UI's next frame
-    events: UiEventQueue,
-    // the UI's last frame had the pointer over a panel, and a text field with the keyboard
-    pointer_captured: bool,
-    keyboard_captured: bool,
 }
 
 impl MapUi {
     pub const MESSAGE_SECONDS: f32 = 5.0;
-    pub const ESCAPE: i32 = 0x1B;
-    pub const Z: i32 = 0x5A;
 
-    pub fn new(scale: f32, event_capacity: usize) -> Self {
+    pub fn new(scale: f32) -> Self {
         Self {
             scale,
             menu: None,
@@ -53,44 +42,12 @@ impl MapUi {
             clipboard: None,
             waypoints_shown: true,
             export: None,
-            high_surrogate: None,
             list_open: false,
-            events: UiEventQueue::new(event_capacity),
-            pointer_captured: false,
-            keyboard_captured: false,
         }
-    }
-
-    // the render thread reports where the UI's last frame had the pointer and the keyboard
-    pub fn set_capture(&mut self, pointer: bool, keyboard: bool) {
-        self.pointer_captured = pointer;
-        self.keyboard_captured = keyboard;
-    }
-
-    pub fn pointer_captured(&self) -> bool {
-        self.pointer_captured
-    }
-
-    pub fn drain_events(&mut self, out: &mut Vec<UiEvent>) {
-        self.events.drain_into(out);
-    }
-
-    // events dropped because the UI did not take them in time
-    pub fn dropped_events(&self) -> u64 {
-        self.events.dropped()
     }
 
     pub fn list_open(&self) -> bool {
         self.list_open
-    }
-
-    // a wheel turn over a UI panel goes to the UI; true when the map must not zoom
-    pub fn wheel(&mut self, input: MouseInput) -> bool {
-        if input.button != MouseInput::WHEEL || input.data == 0 || !self.pointer_captured {
-            return false;
-        }
-        self.events.push(UiEvent::Wheel(input.data));
-        true
     }
 
     // a panel's request, after the UI frame that made it; `name` is the dialog's typed name and
@@ -135,6 +92,15 @@ impl MapUi {
             }
             MapAction::SaveDialog => self.save(name, store, now),
             MapAction::CancelDialog => self.dialog = None,
+            MapAction::CloseWorldMap => {
+                InputController::close_world_map(view);
+                self.close();
+            }
+            MapAction::UndoRemove => {
+                if self.undo.is_some() {
+                    self.undo(store);
+                }
+            }
         }
     }
 
@@ -163,11 +129,6 @@ impl MapUi {
         self.waypoints_shown
     }
 
-    // the dialog or a UI text field has the keyboard: typed characters go to it
-    pub fn wants_text(&self) -> bool {
-        self.dialog.is_some() || self.keyboard_captured
-    }
-
     // a menu or the dialog takes left clicks instead of the map
     pub fn is_open(&self) -> bool {
         self.menu.is_some() || self.dialog.is_some()
@@ -177,47 +138,6 @@ impl MapUi {
     pub fn open_menu(&mut self, at: (f32, f32), target: MenuTarget) {
         if self.dialog.is_none() {
             self.menu = Some(MapMenu::new(at, target));
-        }
-    }
-
-    // a key down; true when the game and the map must not see it. Ctrl+Z works while the undo
-    // lasts; while the dialog is open every key is its own and goes to the UI in order with the
-    // typed text
-    pub fn key(&mut self, input: KeyInput, store: &mut WaypointStore) -> bool {
-        if !input.down {
-            return false;
-        }
-        if input.ctrl && input.code == Self::Z && self.undo.is_some() {
-            self.undo(store);
-            return true;
-        }
-        if self.menu.is_some() && input.code == Self::ESCAPE {
-            self.menu = None;
-            return true;
-        }
-        if self.dialog.is_some() || self.keyboard_captured {
-            self.events.push(UiEvent::Key { code: input.code, down: true, ctrl: input.ctrl, shift: false });
-            return true;
-        }
-        false
-    }
-
-    // one UTF-16 unit of typed text, as WM_CHAR gives it; pairs are joined
-    pub fn text(&mut self, unit: u32) {
-        if !self.wants_text() {
-            return;
-        }
-        let code = match (unit, self.high_surrogate.take()) {
-            (0xD800..=0xDBFF, _) => {
-                self.high_surrogate = Some(unit);
-                return;
-            }
-            (0xDC00..=0xDFFF, Some(high)) => 0x10000 + ((high - 0xD800) << 10) + (unit - 0xDC00),
-            (0xDC00..=0xDFFF, None) => return,
-            (unit, _) => unit,
-        };
-        if let Some(c) = char::from_u32(code) {
-            self.events.push(UiEvent::Text(c));
         }
     }
 
@@ -242,6 +162,11 @@ impl MapUi {
         }
     }
 
+    // the last removal can still be undone
+    pub fn can_undo(&self) -> bool {
+        self.undo.is_some()
+    }
+
     pub fn take_export(&mut self) -> Option<ExportKind> {
         self.export.take()
     }
@@ -254,9 +179,6 @@ impl MapUi {
     pub fn close(&mut self) {
         self.menu = None;
         self.dialog = None;
-        self.high_surrogate = None;
-        self.events.clear();
-        self.keyboard_captured = false;
     }
 
     // the world was left; whether waypoints are shown is kept

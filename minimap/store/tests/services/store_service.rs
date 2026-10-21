@@ -98,18 +98,6 @@ fn without_a_disk_cache_appends_are_acknowledged_and_loads_miss() {
 }
 
 #[test]
-fn config_writes_go_through_the_store_thread() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut service = StoreService::start(None, TestRecords::settings()).unwrap();
-    let path = dir.path().join("config.json");
-    service
-        .send(StoreCommand::WriteConfig { path: path.clone(), json: "{}".to_string(), keep_invalid_copy: false })
-        .unwrap();
-    service.shutdown(Duration::from_secs(5));
-    assert_eq!(std::fs::read_to_string(path).unwrap(), "{}");
-}
-
-#[test]
 fn after_shutdown_sending_reports_the_store_stopped() {
     let mut service = StoreService::start(None, TestRecords::settings()).unwrap();
     service.shutdown(Duration::from_secs(5));

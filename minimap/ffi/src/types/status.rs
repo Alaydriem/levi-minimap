@@ -6,4 +6,8 @@ pub enum LmStatus {
     Panicked = 2,
     NotInWorld = 3,
     Failed = 4,
+    // alaydriem-mod-manager is not loaded
+    ManagerMissing = 5,
+    // the manager refused the registration
+    RegisterFailed = 6,
 }

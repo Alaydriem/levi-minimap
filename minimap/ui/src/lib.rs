@@ -2,6 +2,6 @@
 
 pub mod map;
 pub mod runtime;
-pub mod theme;
+#[cfg(feature = "test-support")]
+pub mod testing;
 pub mod views;
-pub mod widgets;

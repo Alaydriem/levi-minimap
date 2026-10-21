@@ -48,6 +48,7 @@ Alaydriem's Mini Map draws a minimap in the corner of your screen and a full-scr
   - Your own colour for any block or biome, set in the config file.
 - **🖼️ Export**
   - Save the current view, or the whole explored area, as a PNG image.
+  - The view export shows the terrain of the regions on the screen. Waypoints, labels and the grid are not in the image.
 - **💾 Disk cache**
   - Explored areas are saved to disk, so the map is ready the next time you play.
   - Memory use has a fixed budget that you can set in the config file.
@@ -71,9 +72,9 @@ Alaydriem's Mini Map draws a minimap in the corner of your screen and a full-scr
 
 ## 📦 Installation
 
-You need [LeviLamina](https://github.com/LiteLDev/LeviLamina) for the **client**, on a supported game version (see [Compatibility](#-compatibility)).
+You need [LeviLamina](https://github.com/LiteLDev/LeviLamina) for the **client**, on a supported game version (see [Compatibility](#-compatibility)), and [Alaydriem's Mod Manager](https://github.com/alaydriem/levi-crates). The mod manager draws the map, routes the keys, and holds the settings panel and the keybinds.
 
-Install with [lip](https://github.com/LiteLDev/lip). Run this command in your game folder:
+Install with [lip](https://github.com/LiteLDev/lip). Run this command in your game folder. lip installs the mod manager too:
 
 ```powershell
 lip install github.com/alaydriem/levi-minimap#client
@@ -88,9 +89,12 @@ lip uninstall github.com/alaydriem/levi-minimap
 <details>
 <summary><b>Manual install</b></summary>
 
-1. Download `alaydriem-minimap-<version>-client-windows-x64.zip` from the [latest release](https://github.com/alaydriem/levi-minimap/releases/latest).
-2. Extract it into your game's `mods` folder. The result must be `mods/alaydriem-minimap/alaydriem-minimap.dll`.
-3. Start the game.
+1. Install [Alaydriem's Mod Manager](https://github.com/alaydriem/levi-crates) first.
+2. Download `alaydriem-minimap-<version>-client-windows-x64.zip` from the [latest release](https://github.com/alaydriem/levi-minimap/releases/latest).
+3. Extract it into your game's `mods` folder. The result must be `mods/alaydriem-minimap/alaydriem-minimap.dll`.
+4. Start the game.
+
+Without the mod manager, the minimap does nothing and writes one line to the LeviLamina log.
 
 The folder name must stay `alaydriem-minimap`. LeviLamina does not load the mod from a folder with a different name.
 
@@ -100,9 +104,9 @@ The folder name must stay `alaydriem-minimap`. LeviLamina does not load the mod 
 
 ## ✅ Compatibility
 
-| Mod version | Minecraft Bedrock (Windows) | LeviLamina |
-| --- | --- | --- |
-| 0.1.0 | 1.26.51 | 26.51.6 or later 26.51.x |
+| Mod version | Minecraft Bedrock (Windows) | LeviLamina | Alaydriem's Mod Manager |
+| --- | --- | --- | --- |
+| 0.1.0 | 1.26.51 | 26.51.6 or later 26.51.x | 0.1.x |
 
 The mod hooks into the game directly. A new game version needs a new mod release.
 
@@ -114,7 +118,7 @@ The mod hooks into the game directly. A new game version needs a new mod release
 | --- | --- | --- |
 | <kbd>M</kbd> | Open or close the world map | In game |
 | <kbd>Ctrl</kbd> + <kbd>M</kbd> | Show or hide the minimap | In game, or world map open |
-| <kbd>=</kbd> / <kbd>-</kbd> | Zoom the minimap in / out | In game |
+| <kbd>=</kbd> / <kbd>-</kbd> | Zoom the minimap in / out (hold to repeat) | In game |
 | <kbd>N</kbd> | Add a waypoint at your position | In game |
 | <kbd>K</kbd> | Cave mode on / off | In game, or world map open |
 | <kbd>Ctrl</kbd> + <kbd>K</kbd> | Show or hide coordinates | In game, or world map open |
@@ -127,87 +131,47 @@ The mod hooks into the game directly. A new game version needs a new mod release
 | Click a waypoint in the list | Centre the world map on it | Waypoint list open |
 
 > [!TIP]
-> Every key is a setting in `config.json`, written as a [Windows virtual-key code](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes). For example, `77` (`0x4D`) is <kbd>M</kbd>.
+> The first seven keys are keybinds of the mod manager. Change them on the **Keybinds** page of the mod manager's panel. A keybind can have <kbd>Ctrl</kbd>, <kbd>Shift</kbd> and <kbd>Alt</kbd>, for example <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd>. The panel shows a clash with another mod's key.
 
 ---
 
 ## ⚙️ Configuration
 
-The config file is `mods/alaydriem-minimap/config/config.json`. The mod writes it with the default values the first time it starts. A key that you remove from the file uses its default. A value out of range is changed to the nearest allowed value, and the game log shows a warning.
+Change the settings in the mod manager's panel, on the **Minimap** page. A change saves on its own. Most settings apply at once. The panel marks the ones that apply when you next enter a world, and the ones that need a game restart.
+
+The panel saves the settings to `mods/alaydriem-minimap/config/config.hcl`. You can also edit that file by hand while the game is closed. A setting that you remove uses its default. A value out of range is changed to the nearest allowed value. An old `config.json` from an earlier version is not read.
 
 The settings that most players change:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `miniMap.radiusChunks` | `5` | How many chunks the minimap shows from its centre |
-| `miniMap.sizeRatio` | `0.15` | Minimap size, as a fraction of the screen width |
-| `miniMap.rotateWithPlayer` | `false` | Turn the minimap with the player |
-| `miniMap.showNetherCoordinates` | `true` | Also show the Nether or Overworld coordinates |
-| `worldMap.rotateWithPlayer` | `false` | Turn the world map with the player |
-| `worldMap.showChunkGrid` / `showSlimeChunks` | `false` | Start with the chunk grid or the slime chunks shown |
-| `waypoints.maxPerWorld` | `512` | Maximum waypoints in one world |
-| `terrain.shadow.renderStyle` | `2` | Shading style: `0`, `1` or `2` |
-| `terrain.enableTransparentWater` | `true` | Show the ground under shallow water |
-| `terrain.blockColors` | lava only | Your own colour for a block, as `[r, g, b, a]` |
-| `terrain.biomeColorOverrides` | the End only | Your own colour for a biome where a column has no blocks, as `[r, g, b, a]` |
-| `export.folder` | empty | Export folder. Empty means `Pictures/Screenshots` |
+| `mini_map.radius_chunks` | `5` | How many chunks the minimap shows from its centre (the zoom keys change it) |
+| `mini_map.size_ratio` | `0.15` | Minimap size, as a fraction of the screen width |
+| `mini_map.rotate_with_player` | `false` | Turn the minimap with the player |
+| `mini_map.show_nether_coordinates` | `true` | Also show the Nether or Overworld coordinates |
+| `world_map.rotate_with_player` | `false` | Turn the world map with the player |
+| `world_map.show_chunk_grid` / `show_slime_chunks` | `false` | The chunk grid and the slime chunks (the world map's switches change them) |
+| `waypoints.max_per_world` | `512` | Maximum waypoints in one world |
+| `terrain.shadow.render_style` | Shadow map | Shading style: Flat, Gradient or Shadow map |
+| `terrain.enable_transparent_water` | `true` | Show the ground under shallow water |
+| `memory.gpu_texture_budget_mb` | `496` | Map tiles on the GPU. The mod manager's texture budget caps it |
 
-<details>
-<summary><b>Full reference</b></summary>
+Three settings are not in the panel. Set them in `config.hcl`:
 
-Colours in `miniMap` are numbers in the form `0xRRGGBBAA`. Colours in `terrain` are `[r, g, b, a]` arrays. Keys are Windows virtual-key codes.
+```hcl
+terrain {
+  # your own colour for a block, as [r, g, b, a]; at most 64
+  block_colors = { "minecraft:lava" = [230, 110, 20, 255] }
+  # your own colour for a biome where a column has no blocks; at most 64. The default draws the End's
+  # void near black with a purple tint. A name works with or without the minecraft: prefix
+  biome_color_overrides = { "the_end" = [16, 12, 26, 255], "cherry_grove" = [242, 184, 216, 255] }
+}
 
-| Section | Setting | Default |
-| --- | --- | --- |
-| top level | `fontSize` | `18.0` |
-| `miniMap` | `sizeRatio` | `0.15` |
-| | `radiusChunks` / `minRadiusChunks` / `maxRadiusChunks` | `5` / `2` / `16` |
-| | `marginRight` / `marginTop` | `20` / `20` |
-| | `widgetScale` | `1.0` |
-| | `lineThickness` / `borderThickness` / `coordTextMargin` | `1.0` / `2.0` / `8.0` |
-| | `backgroundColor` / `chunkLineColor` / `currentChunkColor` / `borderColor` | `0x000000FF` / `0x787878FF` / `0x3AA0FFFF` / `0x505050FF` |
-| | `playerArrowOutlineColor` / `playerArrowFillColor` | `0x000000FF` / `0xDC3232FF` |
-| | `coordTextColor` / `coordShadowColor` | `0xFFFFFFFF` / `0x000000C8` |
-| | `zoomInKey` / `zoomOutKey` | `0xBB` (<kbd>=</kbd>) / `0xBD` (<kbd>-</kbd>) |
-| | `showCoordinates` / `coordinatesKey` | `true` / `0x4B` (<kbd>Ctrl</kbd> + <kbd>K</kbd>) |
-| | `showNetherCoordinates` / `rotateWithPlayer` | `true` / `false` |
-| `worldMap` | `toggleKey` | `0x4D` (<kbd>M</kbd>) |
-| | `minZoom` / `maxZoom` / `zoomStep` | `0.2` / `40.0` / `1.15` |
-| | `showCoordinates` / `showNetherCoordinates` / `rotateWithPlayer` | `true` / `true` / `false` |
-| | `waypointLabelZoom` | `0.5` |
-| | `showChunkGrid` / `showSlimeChunks` | `false` / `false` |
-| | `hoverBiomeRegions` / `slimeCacheRegions` / `uiEventCapacity` | `16` / `1024` / `64` |
-| | `maxNewTexturesPerFrame` / `textureIdleFrames` | `4` / `600` |
-| `waypoints` | `enabled` / `addKey` | `true` / `0x4E` (<kbd>N</kbd>) |
-| | `maxPerWorld` / `showOnMinimap` / `maxEdgeArrows` / `labelScale` | `512` / `true` / `16` / `1.0` |
-| `caveMode` | `toggleKey` | `0x4B` (<kbd>K</kbd>) |
-| | `bandSize` / `bandMargin` / `scanRadius` / `solidColor` | `16` / `2` / `64` / `[96, 96, 96, 255]` |
-| `terrain` | `enable` / `scanRadius` / `scanMaxChunksPerFrame` | `true` / `128` / `32` |
-| | `rescanIntervalFrames` / `regionBakeThreshold` | `1200` / `64` |
-| | `enableDiskCache` / `enableTransparentWater` | `true` / `true` |
-| | `waterOpacityPerDepth` / `waterMaxOpacity` | `0.1` / `0.6` |
-| | `blockColors` (max 64) | `{ "minecraft:lava": [230, 110, 20, 255] }` |
-| | `biomeColorOverrides` (max 64) | `{ "the_end": [16, 12, 26, 255] }` |
-| `terrain.shadow` | `renderStyle` / `shadowLevel` / `renderScale` / `pcfRadius` | `2` / `130` / `2` / `1` |
-| | `lightAzimuth` / `lightZenith` | `315.0` / `60.0` |
-| `smoothCamera` | `springStrength` / `damping` / `maxDeltaTime` | `36.0` / `7.0` / `0.1` |
-| `memory` | `chunkSurfaceBudgetMb` / `tileBudgetMb` / `tileOverrunPercent` / `gpuTextureBudget` | `64` / `256` / `25` / `1024` |
-| `bake` | `workerThreads` (`0` = automatic) / `queueCapacity` | `0` / `4096` |
-| `store` | `journalMaxMb` / `syncIntervalMs` / `writeQueueCapacity` | `64` / `1000` / `1024` |
-| `export` | `maxPixels` / `folder` | `16384` / `""` |
-| `debug` | `telemetry` / `telemetryIntervalMs` / `captureProbes` | `false` / `1000` / `false` |
-
-The default override draws the End's void near black with a purple tint. A biome name in `biomeColorOverrides` works with or without the `minecraft:` prefix:
-
-```json
-{
-  "terrain": {
-    "biomeColorOverrides": { "cherry_grove": [242, 184, 216, 255] }
-  }
+export {
+  # the export folder; empty means Pictures/Screenshots
+  folder = ""
 }
 ```
-
-</details>
 
 ---
 
@@ -217,6 +181,13 @@ The default override draws the End's void near black with a purple tint. A biome
 <summary><b>The mod does not load.</b></summary>
 
 Check that LeviLamina is the **client** build for your game version (see [Compatibility](#-compatibility)), and that the mod folder is named exactly `mods/alaydriem-minimap/`. The LeviLamina log in the game folder's `logs` folder names the cause.
+
+</details>
+
+<details>
+<summary><b>No map shows.</b></summary>
+
+Make sure that [Alaydriem's Mod Manager](https://github.com/alaydriem/levi-crates) is installed. Without it, the minimap does nothing, and the LeviLamina log has the line `alaydriem-mod-manager is not loaded, the minimap stays inert`. If the mod manager is installed, look in the mod manager's panel: the minimap must be enabled there. The mod manager's log for the minimap is in the game folder, under `logs/amm/alaydriem-minimap/`.
 
 </details>
 
@@ -251,7 +222,7 @@ In `mods/alaydriem-minimap/data/`. Waypoints are kept for each world.
 <details>
 <summary><b>A key does nothing.</b></summary>
 
-Most keys do nothing while a game menu or chat is open. If another mod uses the same key, change the key in `config.json` (see [Controls](#%EF%B8%8F-controls)).
+Most keys do nothing while a game menu or chat is open. If another mod uses the same key, the mod manager's **Conflicts** page shows it. Change the key on the **Keybinds** page (see [Controls](#%EF%B8%8F-controls)).
 
 </details>
 

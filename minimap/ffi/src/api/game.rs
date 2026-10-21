@@ -1,10 +1,9 @@
 use bytemuck::Zeroable;
-use minimap_core::structs::input::{KeyInput, MouseInput};
 use minimap_runtime::structs::SubmitStatus;
 
 use crate::services::{LmBoundary, LmConvert, LmHandle};
 use crate::types::{
-    LmChunkPos, LmChunkSurface, LmColumnSample, LmKeyResult, LmProbeRequest, LmScanPlan, LmStatus, LmStr, LmTickInput,
+    LmChunkPos, LmChunkSurface, LmColumnSample, LmProbeRequest, LmScanPlan, LmStatus, LmStr, LmTickInput,
 };
 
 #[unsafe(no_mangle)]
@@ -20,7 +19,11 @@ pub extern "C" fn lm_tick(handle: *const LmHandle, input: *const LmTickInput, pl
         };
         let mut buffers = handle.game.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let buffers = &mut *buffers;
-        handle.runtime.tick(&LmConvert::tick_input(input), &mut buffers.plan);
+        let tick = LmConvert::tick_input(input);
+        match handle.session.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_mut() {
+            Some(session) => session.tick(&tick, &mut buffers.plan),
+            None => return LmStatus::Failed,
+        }
         buffers.candidates.clear();
         buffers.candidates.extend(buffers.plan.candidates.iter().map(|p| LmConvert::lm_chunk_pos(*p)));
         buffers.block_colors.clear();
@@ -125,48 +128,6 @@ pub extern "C" fn lm_resolve_void_color(handle: *const LmHandle, biome: LmStr, f
             return fallback;
         };
         handle.runtime.resolve_void_color(&name, fallback)
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn lm_key(
-    handle: *const LmHandle,
-    code: i32,
-    down: u8,
-    ctrl: u8,
-    mouse_grabbed: u8,
-    out: *mut LmKeyResult,
-) -> LmStatus {
-    LmBoundary::guard(|| {
-        // SAFETY: the handle came from lm_create; out is writable for the call
-        let (Some(handle), Some(out)) = (unsafe { LmBoundary::handle(handle) }, unsafe { LmBoundary::output(out) })
-        else {
-            return LmStatus::InvalidArgument;
-        };
-        let input = KeyInput::new(code, down != 0, ctrl != 0, mouse_grabbed != 0);
-        *out = LmConvert::key_result(handle.runtime.key(input));
-        LmStatus::Ok
-    })
-}
-
-// one UTF-16 unit of typed text (WM_CHAR), sent only while the frame asks for text input
-#[unsafe(no_mangle)]
-pub extern "C" fn lm_text(handle: *const LmHandle, unit: u32) -> LmStatus {
-    LmBoundary::guard(|| {
-        // SAFETY: the handle came from lm_create
-        let Some(handle) = (unsafe { LmBoundary::handle(handle) }) else { return LmStatus::InvalidArgument };
-        handle.runtime.text(unit);
-        LmStatus::Ok
-    })
-}
-
-// returns 1 when the game must not see the mouse event
-#[unsafe(no_mangle)]
-pub extern "C" fn lm_mouse(handle: *const LmHandle, button: i32, data: i32) -> u8 {
-    LmBoundary::guard_value(0, || {
-        // SAFETY: the handle came from lm_create
-        let Some(handle) = (unsafe { LmBoundary::handle(handle) }) else { return 0 };
-        u8::from(handle.runtime.mouse(MouseInput::new(button, data)))
     })
 }
 

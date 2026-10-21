@@ -1,14 +1,15 @@
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Align, Align2, Area, Context, Id, Key, LayerId, Layout, Order, RichText, Sense, Stroke, TextEdit, Ui, pos2, vec2,
+    Align, Align2, Area, Color32, Context, Id, Key, LayerId, Layout, Order, RichText, Sense, Stroke, TextEdit, Ui,
+    pos2, vec2,
 };
 use minimap_core::services::waypoints::WaypointStore;
 use minimap_core::structs::ui::{DialogTarget, MapAction, WaypointDialog};
 
 use crate::runtime::UiDrafts;
-use crate::theme::{Icon, Metrics, StudioPalette, Typeface};
 use crate::views::ToolsView;
-use crate::widgets::{CardFrame, IconButton, TextButton, Toggle};
+use studio_ui::theme::{Icon, Metrics, StudioPalette, Typeface};
+use studio_ui::widgets::{CardFrame, IconButton, TextButton, Toggle};
 
 // the waypoint dialog over a dimmed map: the name, the colour, the two minimap switches, the
 // position, Cancel and Save. Enter saves and Escape cancels, in order with the typed text
@@ -125,7 +126,11 @@ impl DialogView {
             if *colour == selected {
                 painter.circle_stroke(centre, Self::SWATCH + 4.0, Stroke::new(2.0, StudioPalette::WHITE));
             }
-            painter.circle_filled(centre, Self::SWATCH, StudioPalette::rgba(*colour));
+            painter.circle_filled(
+                centre,
+                Self::SWATCH,
+                Color32::from_rgba_unmultiplied(colour[0], colour[1], colour[2], colour[3]),
+            );
             if response.clicked() {
                 actions.push(MapAction::DialogColour(*colour));
             }

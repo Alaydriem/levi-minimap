@@ -18,5 +18,5 @@ pub struct UiFrame<'a> {
     pub player_block: (i32, i32, i32),
     pub dim: i32,
     pub hover: Option<HoverInfo<'a>>,
-    pub keys: HintKeys,
+    pub keys: HintKeys<'a>,
 }

@@ -2,7 +2,7 @@ use egui::text::{LayoutJob, TextFormat};
 use egui::{Align, Color32, Layout, RichText, Ui};
 use minimap_core::structs::ui::HoverInfo;
 
-use crate::theme::{Metrics, StudioPalette, Typeface};
+use studio_ui::theme::{Metrics, StudioPalette, Typeface};
 
 // the block, chunk and biome under the cursor, as label and value rows; dashes when the cursor is
 // not on the map
@@ -19,7 +19,7 @@ impl HoverView {
         Self::row(ui, "Chunk", chunk);
         let biome = hover.and_then(|h| h.biome).map(|name| {
             let mut job = LayoutJob::default();
-            job.append(name, 0.0, TextFormat::simple(Typeface::semibold(Typeface::UI_SIZE), StudioPalette::TEXT));
+            job.append(name, 0.0, TextFormat::simple(Typeface::semibold(Typeface::LABEL_SIZE), StudioPalette::TEXT));
             job
         });
         Self::row(ui, "Biome", biome);

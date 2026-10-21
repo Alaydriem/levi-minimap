@@ -1,7 +1,5 @@
 #include "bridge/RustBridge.h"
 
-#include "mod/MinimapMod.h"
-
 #include <atomic>
 
 namespace levi_minimap {
@@ -10,34 +8,16 @@ namespace {
 
 std::atomic<LmHandle*> g_handle{nullptr};
 
-void logFromRust(uint8_t level, const uint8_t* message, uintptr_t len) {
-    std::string_view text(reinterpret_cast<const char*>(message), len);
-    auto&            logger = MinimapMod::getInstance().getSelf().getLogger();
-    switch (level) {
-    case 1:
-        logger.error("{}", text);
-        break;
-    case 2:
-        logger.warn("{}", text);
-        break;
-    case 3:
-        logger.info("{}", text);
-        break;
-    default:
-        logger.debug("{}", text);
-        break;
-    }
-}
-
 } // namespace
 
-bool RustBridge::create(const std::filesystem::path& configFile, const std::filesystem::path& dataDir) {
-    std::string config = utf8(configFile);
+LmStatus RustBridge::create(const std::filesystem::path& configDir, const std::filesystem::path& dataDir) {
+    std::string config = utf8(configDir);
     std::string data   = utf8(dataDir);
     LmPaths     paths{str(config), str(data)};
-    LmHandle*   handle = lm_create(&paths, &logFromRust);
+    LmStatus    status = LM_STATUS_FAILED;
+    LmHandle*   handle = lm_create(&paths, &status);
     g_handle.store(handle, std::memory_order_release);
-    return handle != nullptr;
+    return handle ? LM_STATUS_OK : status;
 }
 
 void RustBridge::destroy() {
@@ -46,6 +26,8 @@ void RustBridge::destroy() {
 }
 
 const LmHandle* RustBridge::handle() { return g_handle.load(std::memory_order_acquire); }
+
+void RustBridge::log(uint8_t level, std::string_view message) { lm_log(level, str(message)); }
 
 LmStr RustBridge::str(std::string_view text) {
     return LmStr{reinterpret_cast<const uint8_t*>(text.data()), text.size()};

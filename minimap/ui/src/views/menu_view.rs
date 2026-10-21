@@ -1,8 +1,8 @@
 use egui::{Align2, Area, Context, Id, Order, Sense, Ui, pos2, vec2};
 use minimap_core::structs::ui::{MapAction, MapMenu, MenuItem, MenuTarget, UiFrame};
 
-use crate::theme::{Icon, Metrics, StudioPalette, Typeface};
-use crate::widgets::{CardFrame, Draw};
+use studio_ui::theme::{Icon, Metrics, StudioPalette, Typeface};
+use studio_ui::widgets::{CardFrame, Draw};
 
 // the right-click menu at the point that opened it: a header naming the block or the waypoint,
 // then one row per item; a left press anywhere else closes it
