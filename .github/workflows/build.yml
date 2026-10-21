@@ -46,6 +46,11 @@ jobs:
             mod:
               - 'shim/**'
               - 'minimap/ffi/**'
+              - 'minimap/core/**'
+              - 'minimap/store/**'
+              - 'minimap/ui/**'
+              - 'minimap/runtime/**'
+              - 'minimap/link/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
 
