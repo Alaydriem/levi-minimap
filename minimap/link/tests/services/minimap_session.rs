@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -5,6 +6,8 @@ use amm_core::structs::descriptor::Capability;
 use amm_core::structs::event::{KeybindPhase, ModEvent};
 use amm_core::structs::lease::AcquireOutcome;
 use amm_core::structs::registry::ModIndex;
+use levi_i18n::localize::Localizer;
+use levi_i18n::text::Text;
 use minimap_core::config::Config;
 use minimap_core::structs::draw::TextureGrant;
 use minimap_core::structs::view::PlayerSnapshot;
@@ -12,6 +15,7 @@ use minimap_link::services::MinimapSession;
 use minimap_runtime::services::Runtime;
 use minimap_runtime::structs::{CursorAction, RuntimePaths, ScanPlan, TickInput};
 use minimap_store::structs::WorldIdentity;
+use minimap_ui::message::MinimapMessage;
 
 use crate::support::{FakeClipboard, FakePort, PortCall};
 
@@ -283,5 +287,59 @@ fn disabled_with_the_map_open_closes_it_and_enabled_does_not_open_it_again() {
     assert!(!calls.contains(&PortCall::Acquire(Capability::Input)), "{calls:?}");
     assert!(!calls.contains(&PortCall::Cursor(true)), "{calls:?}");
     drop(calls);
+    session.shutdown();
+}
+
+// what the localizer the session last gave the port makes of Save
+fn save_word(localizer: &Rc<RefCell<Option<Arc<Localizer>>>>) -> Option<String> {
+    let localizer = localizer.borrow();
+    localizer.as_ref().map(|localizer| Text::message(MinimapMessage::Save).resolve(localizer).into_owned())
+}
+
+#[test]
+fn session_start_sets_the_manager_language() {
+    let world = World::new();
+    let runtime = world.runtime(Config::default());
+    let port = FakePort::new();
+    *port.locale.borrow_mut() = Some("en_XA".to_owned());
+    let localizer = Rc::clone(&port.localizer);
+
+    let session = session(port, &runtime);
+
+    let word = save_word(&localizer);
+    assert!(word.as_deref().is_some_and(|word| word != "Save"), "{word:?}");
+    session.shutdown();
+}
+
+#[test]
+fn locale_changed_sets_the_new_language() {
+    let world = World::new();
+    let runtime = world.runtime(Config::default());
+    let port = FakePort::new();
+    *port.locale.borrow_mut() = Some(String::new());
+    let (locale, localizer) = (Rc::clone(&port.locale), Rc::clone(&port.localizer));
+    let mut session = session(port, &runtime);
+    let english = save_word(&localizer);
+
+    *locale.borrow_mut() = Some("en_XA".to_owned());
+    session.port_mut().events.push_back(ModEvent::LocaleChanged);
+    tick(&mut session);
+
+    assert_eq!(english.as_deref(), Some("Save"));
+    let word = save_word(&localizer);
+    assert!(word.as_deref().is_some_and(|word| word != "Save"), "{word:?}");
+    session.shutdown();
+}
+
+#[test]
+fn old_manager_gets_english() {
+    let world = World::new();
+    let runtime = world.runtime(Config::default());
+    let port = FakePort::new();
+    let localizer = Rc::clone(&port.localizer);
+
+    let session = session(port, &runtime);
+
+    assert_eq!(save_word(&localizer).as_deref(), Some("Save"));
     session.shutdown();
 }

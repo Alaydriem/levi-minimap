@@ -1,11 +1,13 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use amm_core::errors::LinkError;
 use amm_core::structs::descriptor::Capability;
 use amm_core::structs::event::ModEvent;
 use amm_core::structs::lease::AcquireOutcome;
+use levi_i18n::localize::Localizer;
 use minimap_core::config::Config;
 use minimap_core::structs::draw::TextureGrant;
 use minimap_link::traits::ManagerPort;
@@ -29,6 +31,10 @@ pub struct FakePort {
     pub config: Config,
     pub refuse_settings: bool,
     pub grant: TextureGrant,
+    // the language code `locale` answers with (None: a manager older than ABI 1.5), and the last localizer the
+    // session gave; shared, so a test changes and reads them after the port moved into the session
+    pub locale: Rc<RefCell<Option<String>>>,
+    pub localizer: Rc<RefCell<Option<Arc<Localizer>>>>,
 }
 
 impl FakePort {
@@ -40,6 +46,8 @@ impl FakePort {
             config: Config::default(),
             refuse_settings: false,
             grant: TextureGrant::OLD_MANAGER,
+            locale: Rc::new(RefCell::new(None)),
+            localizer: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -88,5 +96,13 @@ impl ManagerPort for FakePort {
 
     fn texture_budget_grant(&self) -> TextureGrant {
         self.grant
+    }
+
+    fn locale(&self) -> Option<String> {
+        self.locale.borrow().clone()
+    }
+
+    fn set_localizer(&self, localizer: Arc<Localizer>) {
+        *self.localizer.borrow_mut() = Some(localizer);
     }
 }

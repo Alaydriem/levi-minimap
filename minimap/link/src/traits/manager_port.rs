@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use amm_core::errors::LinkError;
 use amm_core::structs::descriptor::Capability;
 use amm_core::structs::event::ModEvent;
 use amm_core::structs::lease::AcquireOutcome;
+use levi_i18n::localize::Localizer;
 use minimap_core::config::Config;
 use minimap_core::structs::draw::TextureGrant;
 
@@ -26,4 +29,10 @@ pub trait ManagerPort {
 
     // the texture budget the manager granted; an older manager's fixed grant when it cannot say
     fn texture_budget_grant(&self) -> TextureGrant;
+
+    // the language code the person picked in the manager; None on a manager older than ABI 1.5
+    fn locale(&self) -> Option<String>;
+
+    // the localizer the world map's panels resolve their words with, from the next frame on
+    fn set_localizer(&self, localizer: Arc<Localizer>);
 }

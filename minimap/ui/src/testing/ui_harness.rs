@@ -3,11 +3,14 @@ use egui::{
     Context, Event, Key, Modifiers, MouseWheelSource, MouseWheelUnit, OutputCommand, PointerButton, Pos2, RawInput,
     Rect, Shape, TouchPhase, ViewportId, ViewportInfo, pos2, vec2,
 };
-use studio_ui::theme::{FontSource, StudioTheme};
+use levi_ui::font::FontSource;
+use levi_ui::text::UiLocale;
+use levi_ui::theme::Theme;
 
+use crate::runtime::MinimapLocale;
 use crate::testing::{HarnessEvent, HarnessInput, PassOutput, ShownText};
 
-// stands in for the manager in tests: one egui context with the Studio Dark theme, RawInput built from the
+// stands in for the manager in tests: one egui context with the levi-ui theme, RawInput built from the
 // polled pointer and the queued events the way the manager routes them, and the pass's output collected
 pub struct UiHarness {
     ctx: Context,
@@ -33,6 +36,12 @@ impl UiHarness {
 
     pub fn context(&self) -> &Context {
         &self.ctx
+    }
+
+    // the panels' words in the language of `code`, as the manager sets them: empty for English, `en_XA` for the
+    // pseudo-locale
+    pub fn set_locale(&self, code: &str) {
+        UiLocale::set(&self.ctx, MinimapLocale::localizer(code));
     }
 
     // a fresh context, as the manager makes after a lost device or a caught panic
@@ -71,7 +80,7 @@ impl UiHarness {
 
     fn themed() -> Context {
         let ctx = Context::default();
-        StudioTheme::install(&ctx, FontSource::BuiltIn);
+        Theme::install(&ctx, FontSource::BuiltIn);
         ctx
     }
 

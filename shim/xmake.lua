@@ -47,11 +47,11 @@ target("alaydriem-minimap")
         local metadata = json.decode(os.iorunv("cargo", {"metadata", "--format-version", "1", "--manifest-path", manifest}))
         local crate
         for _, package in ipairs(metadata.packages) do
-            if package.name == "studio-ui" then
+            if package.name == "levi-ui" then
                 crate = path.directory(package.manifest_path)
             end
         end
-        assert(crate, "cargo metadata names no studio-ui package")
+        assert(crate, "cargo metadata names no levi-ui package")
         local outputdir = path.join(os.projectdir(), "bin", "alaydriem-minimap")
         os.mkdir(outputdir)
         os.cp(path.join(crate, "assets", "fonts", "OFL.txt"), path.join(outputdir, "OFL.txt"))

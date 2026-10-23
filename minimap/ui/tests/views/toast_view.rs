@@ -1,8 +1,8 @@
+use levi_ui::icon::Icon;
 use minimap_core::services::waypoints::WaypointStore;
 use minimap_core::structs::ui::{MapAction, MenuItem, MenuTarget};
-use studio_ui::theme::Icon;
 
-use crate::support::Scene;
+use crate::support::{IconText, Scene};
 
 #[test]
 fn a_done_message_shows_a_check_in_the_frame_that_set_it() {
@@ -14,7 +14,7 @@ fn a_done_message_shows_a_check_in_the_frame_that_set_it() {
     scene.frame((1200.0, 700.0), false, &[]);
 
     assert!(scene.mesh.draws_text("Copied 1, ~, 2"));
-    assert!(scene.mesh.draws_text(&Icon::CHECK.to_string()));
+    assert!(scene.mesh.draws_text(&IconText::of(Icon::Check)));
 }
 
 #[test]
@@ -25,6 +25,6 @@ fn a_note_shows_an_info_mark() {
     scene.frame((1200.0, 700.0), false, &[]);
 
     assert!(scene.mesh.draws_text("An export is already running"));
-    assert!(scene.mesh.draws_text(&Icon::INFO.to_string()));
-    assert!(!scene.mesh.draws_text(&Icon::CHECK.to_string()));
+    assert!(scene.mesh.draws_text(&IconText::of(Icon::Info)));
+    assert!(!scene.mesh.draws_text(&IconText::of(Icon::Check)));
 }

@@ -1,5 +1,5 @@
-use egui::epaint::{Mesh, RectShape, Vertex};
-use egui::{Align2, Color32, CornerRadius, FontId, Painter, Pos2, Rect, Shape, Stroke, TextureId, pos2};
+use egui::epaint::{Mesh, Vertex};
+use egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Shape, Stroke, TextureId, pos2};
 use minimap_core::structs::draw::{DrawCommand, DrawList, TextAlign};
 
 use crate::map::LayerTextures;
@@ -54,13 +54,6 @@ impl DrawListShapes {
                     let Some(id) = textures.id(tex) else { continue };
                     let uv = Rect::from_min_max(pos2(uv0.0, uv0.1), pos2(uv1.0, uv1.1));
                     painter.image(id, Rect::from_two_pos(at(p0), at(p1)), uv, Color32::WHITE);
-                }
-                DrawCommand::ImageRounded { tex, p0, p1, uv0, uv1, rounding } => {
-                    let uv = Rect::from_min_max(pos2(uv0.0, uv0.1), pos2(uv1.0, uv1.1));
-                    let corner = CornerRadius::same((rounding * scale).round().clamp(0.0, 255.0) as u8);
-                    let rect = Rect::from_two_pos(at(p0), at(p1));
-                    let Some(id) = textures.id(tex) else { continue };
-                    painter.add(RectShape::filled(rect, corner, Color32::WHITE).with_texture(id, uv));
                 }
                 DrawCommand::ImageRotated { tex, centre, half, uv0, uv1, angle } => {
                     let Some(id) = textures.id(tex) else { continue };

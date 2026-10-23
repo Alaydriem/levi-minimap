@@ -44,6 +44,11 @@ fn raw_input_events_are_ignored() {
 }
 
 #[test]
+fn menu_entry_clicks_are_ignored() {
+    assert_eq!(EventRouter::route(ModEvent::MenuEntryClicked { entry: 0 }), RoutedEvent::Ignored);
+}
+
+#[test]
 fn settings_and_world_reload_are_routed() {
     assert_eq!(EventRouter::route(ModEvent::SettingsChanged { paths: 3 }), RoutedEvent::SettingsChanged);
     assert_eq!(EventRouter::route(ModEvent::WorldReloadApply), RoutedEvent::WorldReloadApply);

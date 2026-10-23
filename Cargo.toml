@@ -33,7 +33,18 @@ amm-abi = { git = "https://github.com/alaydriem/levi-crates", branch = "master" 
 amm-client = { git = "https://github.com/alaydriem/levi-crates", branch = "master" }
 amm-core = { git = "https://github.com/alaydriem/levi-crates", branch = "master" }
 amm-ffi = { git = "https://github.com/alaydriem/levi-crates", branch = "master" }
-studio-ui = { git = "https://github.com/alaydriem/levi-crates", branch = "master" }
+levi-ui = { git = "https://github.com/alaydriem/levi-crates", branch = "master" }
+levi-i18n = { git = "https://github.com/alaydriem/levi-crates", branch = "master" }
+levi-i18n-tool = { git = "https://github.com/alaydriem/levi-crates", branch = "master" }
+
+[patch."https://github.com/alaydriem/levi-crates"]
+amm-abi = { path = "../levi-crates/crates/amm-abi" }
+amm-client = { path = "../levi-crates/crates/amm-client" }
+amm-core = { path = "../levi-crates/crates/amm-core" }
+amm-ffi = { path = "../levi-crates/crates/amm-ffi" }
+levi-ui = { path = "../levi-crates/crates/levi-ui" }
+levi-i18n = { path = "../levi-crates/crates/levi-i18n" }
+levi-i18n-tool = { path = "../levi-crates/crates/levi-i18n-tool" }
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

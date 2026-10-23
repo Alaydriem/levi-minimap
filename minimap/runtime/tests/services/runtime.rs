@@ -37,7 +37,7 @@ fn a_session_scans_bakes_and_draws_the_terrain_in_the_minimap() {
         _ => None,
     });
     assert_eq!(side, Some(162));
-    assert!(world.frame.draw.commands.iter().any(|c| matches!(c, DrawCommand::ImageRounded { .. })));
+    assert!(world.frame.draw.commands.iter().any(|c| matches!(c, DrawCommand::ImageDisc { .. })));
     assert_eq!(world.plan.cursor, CursorAction::ClipToCentre);
     runtime.shutdown();
 }
@@ -185,10 +185,9 @@ fn a_player_up_minimap_is_drawn_as_a_turned_disc() {
     let runtime = world.runtime();
     world.player.yaw = 30.0;
     let drawn = world.run_until(&runtime, 2000, |_, frame| {
-        frame.draw.commands.iter().any(|c| matches!(c, DrawCommand::ImageDisc { .. }))
+        frame.draw.commands.iter().any(|c| matches!(c, DrawCommand::ImageDisc { angle, .. } if *angle != 0.0))
     });
-    assert!(drawn, "no disc: {:?}", runtime.stats());
-    assert!(!world.frame.draw.commands.iter().any(|c| matches!(c, DrawCommand::ImageRounded { .. })));
+    assert!(drawn, "no turned disc: {:?}", runtime.stats());
     runtime.shutdown();
 }
 
@@ -320,7 +319,7 @@ fn toggle_coordinates_queues_both_maps() {
 fn minimap_side(world: &mut SyntheticWorld, runtime: &Runtime) -> Option<f32> {
     world.draw(runtime);
     world.frame.draw.commands.iter().find_map(|c| match c {
-        DrawCommand::ImageRounded { p0, p1, .. } => Some(p1.0 - p0.0),
+        DrawCommand::ImageDisc { radius, .. } => Some(2.0 * radius),
         _ => None,
     })
 }

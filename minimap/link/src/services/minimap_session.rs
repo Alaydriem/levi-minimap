@@ -7,6 +7,7 @@ use minimap_core::structs::input::KeybindInput;
 use minimap_core::structs::settings::SettingWrite;
 use minimap_runtime::services::Runtime;
 use minimap_runtime::structs::{RuntimePaths, ScanPlan, TickInput};
+use minimap_ui::runtime::MinimapLocale;
 
 use crate::errors::SessionError;
 use crate::services::{EventRouter, LeaseController, MinimapFrameHandler, SettingsBridge, SystemClipboard};
@@ -50,15 +51,25 @@ impl<P: ManagerPort, C: ClipboardSink> MinimapSession<P, C> {
     const EVENT_CAPACITY: usize = 64;
     const WRITE_CAPACITY: usize = 8;
 
+    // also gives the world map's panels the manager's language
     pub fn with_port(port: P, runtime: Arc<Runtime>, clipboard: C) -> Self {
-        Self {
+        let session = Self {
             port,
             runtime,
             clipboard,
             leases: LeaseController::new(),
             events: Vec::with_capacity(Self::EVENT_CAPACITY),
             writes: Vec::with_capacity(Self::WRITE_CAPACITY),
-        }
+        };
+        session.apply_locale();
+        session
+    }
+
+    // reads the language the person picked in the manager and gives the world map's panels their words in it; a
+    // manager older than ABI 1.5 has no language setting, so the panels show English
+    fn apply_locale(&self) {
+        let code = self.port.locale().unwrap_or_default();
+        self.port.set_localizer(MinimapLocale::localizer(&code));
     }
 
     pub fn runtime(&self) -> &Arc<Runtime> {
@@ -111,6 +122,7 @@ impl<P: ManagerPort, C: ClipboardSink> MinimapSession<P, C> {
                     Err(error) => curia::warn!("changed settings not read", { error: error.to_string() }),
                 }
             }
+            RoutedEvent::LocaleChanged => self.apply_locale(),
             RoutedEvent::Lease(event) => {
                 if let Some(effect) = self.leases.on_event(event) {
                     self.apply(effect);

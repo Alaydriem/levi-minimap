@@ -1,8 +1,11 @@
+use std::sync::Arc;
+
 use amm_client::link::ManagerLink;
 use amm_core::errors::LinkError;
 use amm_core::structs::descriptor::Capability;
 use amm_core::structs::event::ModEvent;
 use amm_core::structs::lease::AcquireOutcome;
+use levi_i18n::localize::Localizer;
 use minimap_core::config::{Config, ConfigClamp};
 use minimap_core::structs::draw::TextureGrant;
 
@@ -46,5 +49,13 @@ impl ManagerPort for ManagerLink {
 
     fn texture_budget_grant(&self) -> TextureGrant {
         TextureGrantReader::read(ManagerLink::texture_budget(self))
+    }
+
+    fn locale(&self) -> Option<String> {
+        ManagerLink::locale(self)
+    }
+
+    fn set_localizer(&self, localizer: Arc<Localizer>) {
+        ManagerLink::set_localizer(self, localizer);
     }
 }

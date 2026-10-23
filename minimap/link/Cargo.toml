@@ -14,6 +14,8 @@ curia.workspace = true
 hcl-rs.workspace = true
 minimap-core.workspace = true
 minimap-runtime.workspace = true
+minimap-ui.workspace = true
+levi-i18n.workspace = true
 egui.workspace = true
 thiserror.workspace = true
 clipboard-win.workspace = true
@@ -21,7 +23,7 @@ clipboard-win.workspace = true
 [dev-dependencies]
 amm-client = { workspace = true, features = ["test-support"] }
 minimap-store.workspace = true
-studio-ui.workspace = true
+levi-ui.workspace = true
 tempfile.workspace = true
 
 [[test]]

@@ -1,0 +1,124 @@
+# Messages of the minimap domain, written by levi-i18n-tool. Do not edit.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Domain: minimap\n"
+
+msgid "World map"
+msgstr ""
+
+#. A section caption, painted in spaced capitals
+msgid "OVERLAYS"
+msgstr ""
+
+msgid "Chunk grid"
+msgstr ""
+
+msgid "Slime chunks"
+msgstr ""
+
+#. Beside a switch that works only when the map is zoomed in
+msgid "zoom in"
+msgstr ""
+
+#. A section caption, painted in spaced capitals
+msgid "UNDER CURSOR"
+msgstr ""
+
+msgid "Waypoints"
+msgstr ""
+
+#. How many waypoints the list shows, in the dimension on the map
+#, python-brace-format
+msgid "{count} in this dimension"
+msgid_plural "{count} in this dimension"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "No waypoints here"
+msgstr ""
+
+msgid "Search waypoints"
+msgstr ""
+
+msgid "Click a row to centre the map  ·  wheel scrolls"
+msgstr ""
+
+#. The distance to a waypoint when the player stands at it
+msgid "Here"
+msgstr ""
+
+#. The distance to a waypoint; m is metres, one block each
+#, python-brace-format
+msgid "{count} m away"
+msgid_plural "{count} m away"
+msgstr[0] ""
+msgstr[1] ""
+
+#. {key} is the key chord that opens and closes the world map
+#, python-brace-format
+msgid "{key} close  ·  right-click for actions  ·  drag to pan"
+msgstr ""
+
+msgid "Block"
+msgstr ""
+
+msgid "Chunk"
+msgstr ""
+
+msgid "Biome"
+msgstr ""
+
+#. The right-click menu title on open ground, in capitals: the block's x and z
+#, python-brace-format
+msgid "BLOCK {x}, {z}"
+msgstr ""
+
+#. The right-click menu title on a waypoint that has no name, in capitals
+msgid "WAYPOINT"
+msgstr ""
+
+#. A world axis before its coordinate
+msgid "X"
+msgstr ""
+
+#. A world axis before its coordinate
+msgid "Y"
+msgstr ""
+
+#. A world axis before its coordinate
+msgid "Z"
+msgstr ""
+
+msgid "New waypoint"
+msgstr ""
+
+msgid "Edit waypoint"
+msgstr ""
+
+#. A section caption, painted in spaced capitals
+msgid "NAME"
+msgstr ""
+
+#. A section caption, painted in spaced capitals
+msgid "COLOUR"
+msgstr ""
+
+#. A section caption, painted in spaced capitals
+msgid "ON THE MINIMAP"
+msgstr ""
+
+#. A section caption, painted in spaced capitals
+msgid "POSITION"
+msgstr ""
+
+msgid "Arrow at the edge when far away"
+msgstr ""
+
+msgid "Show distance on the arrow"
+msgstr ""
+
+msgid "Save"
+msgstr ""

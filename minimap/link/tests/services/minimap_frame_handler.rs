@@ -3,13 +3,14 @@ use std::sync::{Arc, OnceLock};
 use amm_client::link::{FrameHandler, FrameInputView};
 use amm_core::structs::frame::{CursorShape, FrameInputData, LayerKind};
 use egui::{Context, RawInput, Rect};
+use levi_ui::font::FontSource;
+use levi_ui::theme::Theme;
 use minimap_core::config::Config;
 use minimap_core::structs::draw::TextureGrant;
 use minimap_core::structs::view::PlayerSnapshot;
 use minimap_link::services::MinimapFrameHandler;
 use minimap_runtime::services::Runtime;
 use minimap_runtime::structs::{RuntimePaths, ScanPlan, TickInput};
-use studio_ui::theme::{FontSource, StudioTheme};
 
 fn data(layer: LayerKind, time_secs: f64) -> FrameInputData<'static> {
     let allowed = if layer == LayerKind::Hud { FrameInputData::LAYER_HUD } else { FrameInputData::LAYER_OVERLAY };
@@ -24,7 +25,7 @@ fn data(layer: LayerKind, time_secs: f64) -> FrameInputData<'static> {
     }
 }
 
-// one pass of `layer` through the handler in a Studio Dark context, the way amm-client runs it
+// one pass of `layer` through the handler in a levi-ui context, the way amm-client runs it
 fn pass(
     handler: &mut MinimapFrameHandler,
     ctx: &Context,
@@ -41,7 +42,7 @@ fn pass(
 
 fn context() -> Context {
     let ctx = Context::default();
-    StudioTheme::install(&ctx, FontSource::BuiltIn);
+    Theme::install(&ctx, FontSource::BuiltIn);
     ctx
 }
 

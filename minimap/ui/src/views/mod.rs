@@ -1,17 +1,25 @@
+pub mod caption;
 pub mod dialog_view;
 pub mod hint_view;
 pub mod hover_view;
 pub mod list_view;
 pub mod map_screen;
 pub mod menu_view;
+pub mod split_row;
 pub mod toast_view;
+pub mod toggle_row;
 pub mod tools_view;
+pub mod words;
 
+pub use caption::Caption;
 pub use dialog_view::DialogView;
 pub use hint_view::HintView;
 pub use hover_view::HoverView;
 pub use list_view::ListView;
 pub use map_screen::MapScreen;
 pub use menu_view::MenuView;
+pub use split_row::SplitRow;
 pub use toast_view::ToastView;
+pub use toggle_row::ToggleRow;
 pub use tools_view::ToolsView;
+pub use words::Words;

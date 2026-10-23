@@ -11,7 +11,6 @@ pub enum DrawCommand {
     // the text bytes are text[start..start + len] of the owning DrawList
     Text { pos: (f32, f32), colour: u32, size: f32, align: TextAlign, start: u32, len: u32 },
     Image { tex: u32, p0: (f32, f32), p1: (f32, f32), uv0: (f32, f32), uv1: (f32, f32) },
-    ImageRounded { tex: u32, p0: (f32, f32), p1: (f32, f32), uv0: (f32, f32), uv1: (f32, f32), rounding: f32 },
     // an axis-aligned image turned by `angle` radians around `centre`; half is its half size
     ImageRotated { tex: u32, centre: (f32, f32), half: (f32, f32), uv0: (f32, f32), uv1: (f32, f32), angle: f32 },
     // a disc of the texture: screen circle (centre, radius) shows the texture circle (uv_centre, uv_radius)

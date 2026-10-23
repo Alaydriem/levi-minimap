@@ -1,7 +1,8 @@
-use egui::{Area, Context, Event, Id, Key, LayerId, MouseWheelUnit, Order, Sense, pos2};
+use egui::{Area, Context, Event, Key, LayerId, MouseWheelUnit, Order, Sense, pos2};
 use minimap_core::structs::draw::{DrawList, MapLayer};
 use minimap_core::structs::ui::{MapAction, UiFrame};
 
+use crate::id::MinimapUiId;
 use crate::map::{DrawListShapes, LayerTextures};
 use crate::runtime::UiDrafts;
 use crate::views::MapScreen;
@@ -23,7 +24,6 @@ impl LayerPainter {
     const POINTS_PER_LINE: f32 = 50.0;
     // the area under the panels that makes the open map count as egui's: the manager routes a press, a drag and
     // the wheel to a layer only while its egui wants the pointer, and egui does not count the Background layer
-    const MAP_AREA: &'static str = "lm.map";
 
     pub fn new() -> Self {
         Self { shapes: DrawListShapes::new(), drafts: UiDrafts::new(), actions: Vec::new(), typing: false }
@@ -75,12 +75,9 @@ impl LayerPainter {
     // the whole screen, under the panels (they are Foreground); it never moves and draws nothing
     fn map_area(ctx: &Context) {
         let screen = ctx.content_rect();
-        Area::new(Id::unique(Self::MAP_AREA)).order(Order::Middle).fixed_pos(screen.min).movable(false).show(
-            ctx,
-            |ui| {
-                ui.allocate_rect(screen, Sense::click_and_drag());
-            },
-        );
+        Area::new(MinimapUiId::Map.id()).order(Order::Middle).fixed_pos(screen.min).movable(false).show(ctx, |ui| {
+            ui.allocate_rect(screen, Sense::click_and_drag());
+        });
     }
 
     // wheel notches in this pass, away from the user positive
@@ -102,7 +99,7 @@ impl LayerPainter {
     // area are the map, not a panel
     pub fn covers(ctx: &Context, at: (f32, f32)) -> bool {
         let ppp = ctx.pixels_per_point().max(f32::EPSILON);
-        let map = LayerId::new(Order::Middle, Id::unique(Self::MAP_AREA));
+        let map = LayerId::new(Order::Middle, MinimapUiId::Map.id());
         ctx.layer_id_at(pos2(at.0 / ppp, at.1 / ppp))
             .is_some_and(|layer| layer.order != Order::Background && layer != map)
     }

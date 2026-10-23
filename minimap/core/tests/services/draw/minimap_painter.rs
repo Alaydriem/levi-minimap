@@ -38,19 +38,28 @@ fn the_disc_sits_in_the_top_right_corner_and_scales_with_the_widget() {
 }
 
 #[test]
-fn the_terrain_texture_is_a_rounded_image_with_uvs_around_the_camera() {
-    let draw = paint(&sixth(), Some(1));
+fn the_terrain_texture_is_a_disc_the_size_of_the_border_ring_with_uvs_around_the_camera() {
+    let wide = MiniMapConfig { widget_scale: 4.0, ..sixth() };
+    let draw = paint(&wide, Some(1));
     let image = draw.commands.iter().find_map(|c| match c {
-        DrawCommand::ImageRounded { tex, uv0, uv1, rounding, .. } => Some((*tex, *uv0, *uv1, *rounding)),
+        DrawCommand::ImageDisc { tex, centre, radius, uv_centre, uv_radius, angle } => {
+            Some((*tex, *centre, *radius, *uv_centre, *uv_radius, *angle))
+        }
         _ => None,
     });
-    let (tex, uv0, uv1, rounding) = image.expect("an image");
+    let ring = draw.commands.iter().find_map(|c| match c {
+        DrawCommand::Circle { centre, radius, .. } => Some((*centre, *radius)),
+        _ => None,
+    });
+    let (tex, centre, radius, uv_centre, uv_radius, angle) = image.expect("an image");
     assert_eq!(tex, 1);
-    assert!((rounding - 100.0).abs() < 1e-3);
-    assert!((uv0.0 - (8.5 - 80.0 + 73.0) / 162.0).abs() < 1e-5);
-    assert!((uv1.0 - (8.5 + 80.0 + 73.0) / 162.0).abs() < 1e-5);
+    assert_eq!(angle, 0.0);
+    assert_eq!(Some((centre, radius)), ring);
+    assert!((radius - 400.0).abs() < 1e-3);
+    assert!((uv_centre.0 - (8.5 + 73.0) / 162.0).abs() < 1e-5);
+    assert!((uv_radius - 80.0 / 162.0).abs() < 1e-5);
     let no_texture = paint(&sixth(), None);
-    assert!(!no_texture.commands.iter().any(|c| matches!(c, DrawCommand::ImageRounded { .. })));
+    assert!(!no_texture.commands.iter().any(|c| matches!(c, DrawCommand::ImageDisc { .. })));
 }
 
 #[test]
@@ -131,7 +140,6 @@ fn the_nether_line_follows_its_own_switch_and_the_dimension() {
 fn a_turned_minimap_draws_a_disc_centred_on_the_camera() {
     let mut draw = DrawList::new();
     MinimapPainter::new(&sixth()).paint(&MinimapFrame { angle: 0.6, ..frame(Some(1)) }, &mut draw);
-    assert!(!draw.commands.iter().any(|c| matches!(c, DrawCommand::ImageRounded { .. })));
     let disc = draw.commands.iter().find_map(|c| match c {
         DrawCommand::ImageDisc { tex, centre, radius, uv_centre, uv_radius, angle } => {
             Some((*tex, *centre, *radius, *uv_centre, *uv_radius, *angle))

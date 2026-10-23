@@ -13,10 +13,12 @@ test-support = []
 [dependencies]
 egui.workspace = true
 minimap-core.workspace = true
-studio-ui.workspace = true
+levi-ui.workspace = true
+levi-i18n.workspace = true
 
 [dev-dependencies]
 minimap-ui = { path = ".", features = ["test-support"] }
+levi-i18n-tool.workspace = true
 
 [[test]]
 name = "integration"

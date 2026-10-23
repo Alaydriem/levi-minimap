@@ -14,6 +14,7 @@ impl EventRouter {
                 None => RoutedEvent::Ignored,
             },
             ModEvent::SettingsChanged { .. } => RoutedEvent::SettingsChanged,
+            ModEvent::LocaleChanged => RoutedEvent::LocaleChanged,
             ModEvent::WorldReloadApply => RoutedEvent::WorldReloadApply,
             ModEvent::Enabled
             | ModEvent::Disabled

@@ -4,6 +4,8 @@ use std::time::Duration;
 
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use egui::{Context, Event, Pos2, RawInput, Rect, pos2, vec2};
+use levi_ui::font::FontSource;
+use levi_ui::theme::Theme;
 use minimap_bench::services::{BenchInputs, BenchTerrain, OverlayScenes};
 use minimap_bench::structs::BenchInput;
 use minimap_core::config::{Config, MiniMapConfig, TerrainConfig};
@@ -30,7 +32,6 @@ use minimap_store::services::{Journal, RegionFiles};
 use minimap_store::structs::JournalRecord;
 use minimap_ui::map::LayerTextures;
 use minimap_ui::runtime::LayerPainter;
-use studio_ui::theme::{FontSource, StudioTheme};
 
 struct MinimapBenches;
 
@@ -310,11 +311,11 @@ impl MinimapBenches {
         }
     }
 
-    // a Studio Dark context like the manager's, with a 1x1 texture for each map texture id, so every image
+    // a levi-ui context like the manager's, with a 1x1 texture for each map texture id, so every image
     // the painters draw is tessellated as in the game
     fn layer_context(textures: &mut LayerTextures, ids: std::ops::Range<u32>) -> Context {
         let ctx = Context::default();
-        StudioTheme::install(&ctx, FontSource::Embedded);
+        Theme::install(&ctx, FontSource::Embedded);
         let buffers = vec![vec![255u8; 4]];
         let ops: Vec<TextureOp> = ids.map(|tex| TextureOp::Upload { tex, width: 1, height: 1, buffer: 0 }).collect();
         let mut output = ctx.run_pass(Self::layer_input(), |ctx| {
@@ -425,7 +426,7 @@ impl MinimapBenches {
             b.iter_batched(
                 || {
                     let ctx = Context::default();
-                    StudioTheme::install(&ctx, FontSource::Embedded);
+                    Theme::install(&ctx, FontSource::Embedded);
                     ctx
                 },
                 |fresh| black_box(Self::pass(&fresh, &mut LayerPainter::new(), &LayerTextures::new(1), &draw, None)),
