@@ -17,6 +17,24 @@ description = "Every workspace test through cargo-nextest"
 dir = "{{config_root}}"
 run = "cargo nextest run --workspace"
 
+# Translation catalog: minimap/ui/i18n holds minimap.pot (written from MinimapMessage), the translators' <locale>.po
+# files, and packs/<locale>.json.
+
+[tasks."i18n:extract"]
+description = "Writes minimap/ui/i18n/minimap.pot from MinimapMessage"
+dir = "{{config_root}}"
+run = "cargo run -q -p minimap-ui --example minimap_i18n_extract"
+
+[tasks."i18n:check"]
+description = "Fails when minimap/ui/i18n/minimap.pot is out of date with MinimapMessage"
+dir = "{{config_root}}"
+run = "cargo run -q -p minimap-ui --example minimap_i18n_extract -- --check"
+
+[tasks."i18n:pseudo"]
+description = "Writes the en_XA pseudo-locale pack of minimap.pot into minimap/ui/i18n/packs/en_XA.json"
+dir = "{{config_root}}"
+run = "cargo run -q --manifest-path ../levi-crates/Cargo.toml -p levi-i18n-tool -- pseudo minimap/ui/i18n/minimap.pot minimap/ui/i18n/packs/en_XA.json"
+
 [tasks.header]
 description = "Regenerates shim/include/levi_minimap.h from the minimap-ffi crate"
 dir = "{{config_root}}"
@@ -49,15 +67,12 @@ shell = "bash -c"
 run = 'mkdir -p "${LM_MODS_DIR:?set LM_MODS_DIR in mise.local.toml}/alaydriem-minimap" && cp -r shim/bin/alaydriem-minimap/. "$LM_MODS_DIR/alaydriem-minimap/"'
 
 [tasks.e2e]
-description = "Builds and runs the C++ end-to-end harness; it also replays the synthetic walk and every capture in fixtures/"
-depends = ["build-ffi", "header"]
-dir = "{{config_root}}/e2e"
+description = "Runs minimap against the real mod manager host (minimap-ffi's e2e target) and replays the synthetic walk and every capture in fixtures/"
+dir = "{{config_root}}"
 env = { LM_E2E_CAPTURES = "{{config_root}}/target/e2e" }
 run = [
   "cargo run -q --release -p minimap-bench --bin capture-tool -- e2e {{config_root}}/fixtures {{config_root}}/target/e2e",
-  "xmake f -p windows -a x64 -m release -y",
-  "xmake -y",
-  "xmake run lm-e2e",
+  "cargo nextest run -p minimap-ffi --test e2e",
 ]
 
 [tasks.bench]

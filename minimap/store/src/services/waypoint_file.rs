@@ -5,7 +5,7 @@ use minimap_core::structs::waypoint::Waypoint;
 use serde_json::{Value, json};
 
 use crate::errors::StoreError;
-use crate::services::ConfigFile;
+use crate::services::JsonFile;
 
 // waypoints.json: { "version": 1, "waypoints": [ ... ] }
 pub struct WaypointFile;
@@ -40,16 +40,16 @@ impl WaypointFile {
     // a missing file is no waypoints; a file that does not parse is moved to waypoints.json.invalid,
     // so the next save cannot overwrite what the player may want back
     pub fn load(path: &Path) -> Result<Vec<Waypoint>, StoreError> {
-        let Some(text) = ConfigFile::read(path)? else { return Ok(Vec::new()) };
+        let Some(text) = JsonFile::read(path)? else { return Ok(Vec::new()) };
         match Self::parse(&text) {
             Ok((waypoints, warnings)) => {
                 for warning in warnings {
-                    log::warn!("{}: {warning}", path.display());
+                    curia::warn!("waypoint file warning", { path: path.display().to_string(), warning: warning.to_string() });
                 }
                 Ok(waypoints)
             }
             Err(error) => {
-                log::warn!("{} is not readable ({error}); it is kept as waypoints.json.invalid", path.display());
+                curia::warn!("waypoint file is not readable; it is kept as waypoints.json.invalid", { path: path.display().to_string(), error: error.to_string() });
                 fs::rename(path, path.with_extension("json.invalid"))?;
                 Ok(Vec::new())
             }
@@ -58,6 +58,6 @@ impl WaypointFile {
 
     // replaces the file in one rename
     pub fn save(path: &Path, waypoints: &[Waypoint]) -> Result<(), StoreError> {
-        ConfigFile::write(path, &Self::to_json(waypoints)?, false)
+        JsonFile::write(path, &Self::to_json(waypoints)?)
     }
 }

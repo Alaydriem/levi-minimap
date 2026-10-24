@@ -7,6 +7,7 @@ use minimap_core::services::memory::{ChunkStore, KnownEmptySet, TileStore};
 use minimap_core::services::ui::MapUi;
 use minimap_core::services::waypoints::WaypointStore;
 use minimap_core::structs::bake::BakeSettings;
+use minimap_core::structs::export::ViewRegions;
 use minimap_core::structs::pos::RegionPos;
 use minimap_core::structs::view::{PlayerSnapshot, ViewState};
 
@@ -38,8 +39,12 @@ pub struct Shared {
     pub world_epoch: AtomicU64,
     // the world map asked for an explored-area export; the game thread starts it
     pub area_export: AtomicBool,
+    // the world map asked to export the regions on screen; the game thread starts it
+    pub view_export: Mutex<Option<ViewRegions>>,
     // the map layer shown: a dimension id, or a cave band's layer id; written by the game thread
     pub layer: AtomicI32,
+    // a world map text field had the keyboard at the end of the last overlay pass; written by the render thread
+    pub typing: AtomicBool,
     pub bake_timing: BakeTiming,
 }
 
@@ -72,7 +77,9 @@ impl Shared {
             tile_requests: crossbeam_channel::bounded(Self::TILE_REQUEST_CAPACITY),
             world_epoch: AtomicU64::new(0),
             area_export: AtomicBool::new(false),
+            view_export: Mutex::new(None),
             layer: AtomicI32::new(0),
+            typing: AtomicBool::new(false),
             bake_timing: BakeTiming::default(),
         }
     }

@@ -1,27 +1,36 @@
-use egui::{Align2, Area, Context, Id, Order, Sense, Ui, pos2, vec2};
+use egui::{Area, Context, Order, Sense, Ui, pos2, vec2};
+use levi_i18n::localize::Localizer;
+use levi_i18n::text::{Args, Text, UserText};
+use levi_ui::draw::{Draw, TextFit, TextStyle, TypeSize};
+use levi_ui::font::FontFace;
+use levi_ui::icon::Icon;
+use levi_ui::text::UiLocale;
+use levi_ui::tokens::{ColorToken, ContainerToken, color, container};
+use levi_ui::widget::{Menu, MenuItem as MenuRow, MenuLeading};
 use minimap_core::structs::ui::{MapAction, MapMenu, MenuItem, MenuTarget, UiFrame};
 
-use crate::theme::{Icon, Metrics, StudioPalette, Typeface};
-use crate::widgets::{CardFrame, Draw};
+use crate::id::MinimapUiId;
+use crate::message::MinimapMessage;
 
 // the right-click menu at the point that opened it: a header naming the block or the waypoint,
-// then one row per item; a left press anywhere else closes it
+// then one levi-ui menu item per entry; a left press anywhere else closes it
 pub struct MenuView;
 
 impl MenuView {
-    pub const ROW_HEIGHT: f32 = 34.0;
     const OFFSET: f32 = 6.0;
+    const HEADER: TextStyle = TextStyle::new(TypeSize::Caption, FontFace::Semibold).tracked();
+    const HEADER_HEIGHT: f32 = 22.0;
 
     pub fn show(ctx: &Context, frame: &UiFrame<'_>, menu: &MapMenu, actions: &mut Vec<MapAction>) {
         let ppp = ctx.pixels_per_point().max(f32::EPSILON);
         let at = pos2(menu.at.0 / ppp + Self::OFFSET, menu.at.1 / ppp + Self::OFFSET);
-        let shown = Area::new(Id::unique("lm.menu")).fixed_pos(at).order(Order::Foreground).show(ctx, |ui| {
-            CardFrame::card().inner_margin(egui::Margin::symmetric(6, 10)).show(ui, |ui| {
-                ui.set_width(Metrics::MENU_WIDTH - 12.0);
+        let shown = Area::new(MinimapUiId::Menu.id()).fixed_pos(at).order(Order::Foreground).show(ctx, |ui| {
+            Menu::frame().show(ui, |ui| {
+                ui.set_width(<container::Menu as ContainerToken>::VALUE - Menu::frame().total_margin().sum().x);
                 Self::header(ui, frame, menu.target);
                 for item in &menu.items {
                     if *item == MenuItem::ExportView {
-                        ui.separator();
+                        Menu::separator(ui);
                     }
                     if Self::row(ui, *item, frame.ui.waypoints_shown()) {
                         actions.push(MapAction::Choose(*item));
@@ -38,55 +47,47 @@ impl MenuView {
         }
     }
 
-    // "BLOCK x, z" for the ground, the waypoint's name for a marker
-    pub fn title(frame: &UiFrame<'_>, target: MenuTarget) -> String {
+    // "BLOCK x, z" for the ground, the waypoint's name for a marker, in the language of `localizer`. The messages are
+    // written in capitals; the player's waypoint name, which no one translates, is put in capitals here
+    pub fn title(frame: &UiFrame<'_>, target: MenuTarget, localizer: &Localizer) -> String {
         match target {
-            MenuTarget::Ground { x, z, .. } => format!("Block {x}, {z}"),
-            MenuTarget::Marker(id) => {
-                frame.waypoints.iter().find(|w| w.id == id).map_or_else(|| "Waypoint".to_string(), |w| w.name.clone())
+            MenuTarget::Ground { x, z, .. } => {
+                let args = Args::new().int("x", i64::from(x)).int("z", i64::from(z));
+                Text::format(MinimapMessage::BlockAt, args).resolve(localizer).into_owned()
             }
+            MenuTarget::Marker(id) => frame.waypoints.iter().find(|w| w.id == id).map_or_else(
+                || Text::message(MinimapMessage::Waypoint).resolve(localizer).into_owned(),
+                |w| w.name.to_uppercase(),
+            ),
         }
     }
 
     fn header(ui: &mut Ui, frame: &UiFrame<'_>, target: MenuTarget) {
-        let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
-        let at = pos2(rect.left() + 8.0, rect.center().y);
-        Draw::caps(ui.painter(), at, Align2::LEFT_CENTER, &Self::title(frame, target), StudioPalette::TEXT_FAINT);
+        let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), Self::HEADER_HEIGHT), Sense::hover());
+        let title = Self::title(frame, target, &UiLocale::get(ui.ctx()));
+        let faint = <color::TextFaint as ColorToken>::VALUE;
+        let room = rect.width() - 8.0;
+        let galley = Draw::galley(ui.painter(), &title, Self::HEADER, faint, TextFit::Truncate(room));
+        let at = pos2(rect.left() + 8.0, rect.center().y - galley.size().y * 0.5);
+        ui.painter().galley(at, galley, faint);
     }
 
-    pub fn icon(item: MenuItem, waypoints_shown: bool) -> char {
+    pub fn icon(item: MenuItem, waypoints_shown: bool) -> Icon {
         match item {
-            MenuItem::AddWaypoint => Icon::ADD,
-            MenuItem::CopyCoordinates => Icon::COPY,
-            MenuItem::ToggleWaypoints if waypoints_shown => Icon::HIDE,
-            MenuItem::ToggleWaypoints => Icon::SHOW,
-            MenuItem::EditWaypoint => Icon::EDIT,
-            MenuItem::RemoveWaypoint => Icon::DELETE,
-            MenuItem::ExportView => Icon::CAMERA,
-            MenuItem::ExportArea => Icon::SHARE,
+            MenuItem::AddWaypoint => Icon::Add,
+            MenuItem::CopyCoordinates => Icon::Copy,
+            MenuItem::ToggleWaypoints if waypoints_shown => Icon::Hide,
+            MenuItem::ToggleWaypoints => Icon::Show,
+            MenuItem::EditWaypoint => Icon::Edit,
+            MenuItem::RemoveWaypoint => Icon::Delete,
+            MenuItem::ExportView => Icon::Camera,
+            MenuItem::ExportArea => Icon::Share,
         }
     }
 
-    // one item; true when clicked
+    // one item; true when clicked. The item's words come from minimap-core and stay English for now
     fn row(ui: &mut Ui, item: MenuItem, waypoints_shown: bool) -> bool {
-        let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), Self::ROW_HEIGHT), Sense::click());
-        let painter = ui.painter();
-        let hot = response.hovered();
-        if hot {
-            Draw::fill(painter, rect, Metrics::RADIUS_CONTROL, StudioPalette::BG_HOVER);
-        }
-        let colour = if hot { StudioPalette::TEXT } else { StudioPalette::TEXT_DIM };
-        let y = rect.center().y;
-        Draw::icon(painter, pos2(rect.left() + 18.0, y), Self::icon(item, waypoints_shown), 15.0, colour);
-        let label = item.label(waypoints_shown);
-        Draw::text(
-            painter,
-            pos2(rect.left() + 38.0, y),
-            Align2::LEFT_CENTER,
-            label,
-            Typeface::body(),
-            StudioPalette::TEXT,
-        );
-        response.clicked()
+        let label = Text::user(UserText::from_model(item.label(waypoints_shown).to_owned()));
+        MenuRow::new(label).leading(MenuLeading::Icon(Self::icon(item, waypoints_shown))).show(ui).clicked()
     }
 }

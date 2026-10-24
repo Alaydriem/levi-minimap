@@ -68,7 +68,7 @@ impl BiomeResolver {
             }
         }
         if overflow {
-            log::debug!("a chunk has more than {} biomes; the extra columns take its first biome", BiomePalette::SLOTS);
+            curia::debug!("a chunk has more biomes than a palette holds; the extra columns take its first biome", { slots: BiomePalette::SLOTS });
         }
         waiting
     }

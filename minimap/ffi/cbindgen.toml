@@ -19,6 +19,6 @@ rename_variants = "ScreamingSnakeCase"
 prefix_with_name = true
 
 [export]
-include = ["LmStatus", "LmChunkSurface", "LmColumnSample", "LmProbeRequest", "LmKeyResult", "LmFrame", "LmTextureOp", "LmUiVertex", "LmUiDraw", "LmUiTextureDelta", "LmUiText", "LmStats"]
+include = ["LmStatus", "LmChunkSurface", "LmColumnSample", "LmProbeRequest", "LmStats"]
 [layout]
 aligned_n = "LM_ALIGNED"

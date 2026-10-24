@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use minimap_core::services::waypoints::WaypointStore;
 use minimap_core::structs::draw::DrawCommand;
-use minimap_core::structs::input::KeyInput;
+use minimap_core::structs::input::{KeyPhase, KeybindAction, KeybindInput};
 use minimap_core::structs::waypoint::WaypointSource;
 use minimap_runtime::services::{Runtime, WaypointSync};
 use minimap_runtime::structs::TickInput;
@@ -10,14 +10,20 @@ use minimap_store::services::WaypointFile;
 
 use crate::support::SyntheticWorld;
 
-const N: i32 = 0x4E;
-
 fn press_n(runtime: &Runtime) -> bool {
-    runtime.key(KeyInput::new(N, true, false, true)).consume
+    let input = KeybindInput { action: KeybindAction::AddWaypoint, phase: KeyPhase::Pressed, mouse_grabbed: true };
+    runtime.keybind(input).add_waypoint
 }
 
 fn tick_dead(world: &mut SyntheticWorld, runtime: &Runtime, dead: bool) {
-    let input = TickInput { player: world.player, foreground: true, cursor_hidden: true, dead };
+    let input = TickInput {
+        player: world.player,
+        foreground: true,
+        cursor_hidden: true,
+        dead,
+        mouse_grabbed: true,
+        ..TickInput::default()
+    };
     runtime.tick(&input, &mut world.plan);
 }
 
@@ -94,7 +100,7 @@ fn a_change_is_saved_after_the_save_delay_without_leaving() {
 #[test]
 fn waypoints_are_saved_with_the_disk_cache_off() {
     let mut world = SyntheticWorld::new();
-    world.write_config(r#"{ "terrain": { "enableDiskCache": false } }"#);
+    world.config.terrain.enable_disk_cache = false;
     let runtime = world.runtime();
     assert!(wait_until_loaded(&mut world, &runtime));
     press_n(&runtime);
@@ -107,7 +113,7 @@ fn waypoints_are_saved_with_the_disk_cache_off() {
 #[test]
 fn with_waypoints_turned_off_the_hotkey_passes_to_the_game_and_nothing_is_written() {
     let mut world = SyntheticWorld::new();
-    world.write_config(r#"{ "waypoints": { "enabled": false } }"#);
+    world.config.waypoints.enabled = false;
     let runtime = world.runtime();
     world.tick(&runtime);
     assert!(!press_n(&runtime));

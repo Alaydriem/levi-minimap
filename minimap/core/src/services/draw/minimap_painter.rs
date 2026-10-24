@@ -1,7 +1,7 @@
 use crate::config::MiniMapConfig;
 use crate::services::draw::{CircleClip, CoordinateText, MapRotation};
 use crate::structs::Rgba;
-use crate::structs::draw::{DrawCommand, DrawList, MinimapFrame, SamplerKind, TextAlign};
+use crate::structs::draw::{DrawCommand, DrawList, MinimapFrame, TextAlign};
 
 // the minimap widget: disc, terrain texture, chunk grid, current chunk, arrow, coordinates, border
 pub struct MinimapPainter {
@@ -42,27 +42,14 @@ impl MinimapPainter {
             let side = frame.image_side as f32;
             let u = |wx: f32| (wx - frame.image_origin.0 as f32) / side;
             let v = |wz: f32| (wz - frame.image_origin.1 as f32) / side;
-            draw.push(DrawCommand::Sampler(SamplerKind::Point));
-            if turn.is_turned() {
-                draw.push(DrawCommand::ImageDisc {
-                    tex,
-                    centre,
-                    radius,
-                    uv_centre: (u(frame.camera.x), v(frame.camera.z)),
-                    uv_radius: blocks / side,
-                    angle: frame.angle,
-                });
-            } else {
-                draw.push(DrawCommand::ImageRounded {
-                    tex,
-                    p0: (centre.0 - radius, centre.1 - radius),
-                    p1: (centre.0 + radius, centre.1 + radius),
-                    uv0: (u(frame.camera.x - blocks), v(frame.camera.z - blocks)),
-                    uv1: (u(frame.camera.x + blocks), v(frame.camera.z + blocks)),
-                    rounding: radius,
-                });
-            }
-            draw.push(DrawCommand::Sampler(SamplerKind::Linear));
+            draw.push(DrawCommand::ImageDisc {
+                tex,
+                centre,
+                radius,
+                uv_centre: (u(frame.camera.x), v(frame.camera.z)),
+                uv_radius: blocks / side,
+                angle: frame.angle,
+            });
         }
 
         let clip = radius - Self::LINE_CLIP_INSET;

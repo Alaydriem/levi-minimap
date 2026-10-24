@@ -9,10 +9,11 @@ autotests = false
 [dependencies]
 bytemuck.workspace = true
 crossbeam-channel.workspace = true
-log.workspace = true
+curia.workspace = true
 minimap-core.workspace = true
 minimap-store.workspace = true
 minimap-ui.workspace = true
+egui.workspace = true
 png.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -20,6 +21,7 @@ zstd.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+minimap-ui = { workspace = true, features = ["test-support"] }
 
 [[test]]
 name = "integration"

@@ -1,13 +1,13 @@
 use std::io::{Read, Write};
 
 use minimap_core::structs::chunk::{ChunkProbe, ChunkSurface, ColumnSample};
-use minimap_core::structs::input::{KeyInput, MouseInput};
+use minimap_core::structs::input::{KeyPhase, KeybindAction, KeybindInput};
 use minimap_core::structs::pos::ChunkPos;
 use minimap_core::structs::view::PlayerSnapshot;
 
 use crate::errors::CaptureError;
 use crate::services::field_reader::FieldReader;
-use crate::structs::{CaptureEvent, CaptureHeader, FrameInput, SubmitStatus, TickInput};
+use crate::structs::{CaptureEvent, CaptureHeader, SubmitStatus, TickInput};
 
 // .lmcap: a 20-byte header and the terrain config as JSON, then records of
 // [tag u8][payload length u32][payload], zstd-compressed (or raw, for the C++ e2e harness)
@@ -30,6 +30,7 @@ impl CaptureCodec {
     pub const MOUSE: u8 = 8;
     pub const FRAME: u8 = 9;
     pub const BIOME_NAME: u8 = 10;
+    pub const KEYBIND: u8 = 11;
     // a biome name record holds this many name bytes; a longer name is cut
     pub const NAME_BYTES: usize = 64;
     const PROBE_BYTES: usize = std::mem::size_of::<ChunkProbe>();
@@ -94,15 +95,12 @@ impl CaptureCodec {
                 out.extend_from_slice(&sample.biome_id.to_le_bytes());
             }
             CaptureEvent::Block { x, z, dim } => Self::put_pos(out, ChunkPos::new(*x, *z, *dim)),
-            CaptureEvent::Key(key) => {
-                out.extend_from_slice(&key.code.to_le_bytes());
-                out.extend_from_slice(&[u8::from(key.down), u8::from(key.ctrl), u8::from(key.mouse_grabbed)]);
+            CaptureEvent::Keybind(input) => {
+                let action = KeybindAction::ALL.iter().position(|a| *a == input.action).unwrap_or(0) as u8;
+                out.extend_from_slice(&[action, Self::phase_code(input.phase), u8::from(input.mouse_grabbed)]);
             }
-            CaptureEvent::Mouse(mouse) => {
-                out.extend_from_slice(&mouse.button.to_le_bytes());
-                out.extend_from_slice(&mouse.data.to_le_bytes());
-            }
-            CaptureEvent::Frame(frame) => Self::put_frame(out, frame),
+            // a retired record is written as zeros of its old size
+            CaptureEvent::Retired(tag) => out.resize(out.len() + Self::payload_bytes(*tag).unwrap_or(0), 0),
         }
         let len = (out.len() - start - Self::RECORD_HEADER_BYTES) as u32;
         out[start + 1..start + 5].copy_from_slice(&len.to_le_bytes());
@@ -134,10 +132,14 @@ impl CaptureCodec {
                 CaptureEvent::Column { pos, index, sample }
             }
             Self::BLOCK => CaptureEvent::Block { x: f.i32(), z: f.i32(), dim: f.i32() },
-            Self::KEY => CaptureEvent::Key(KeyInput::new(f.i32(), f.flag(), f.flag(), f.flag())),
-            Self::MOUSE => CaptureEvent::Mouse(MouseInput::new(f.i32(), f.i32())),
+            Self::KEY | Self::MOUSE | Self::FRAME => CaptureEvent::Retired(tag),
+            Self::KEYBIND => {
+                let action = KeybindAction::from_index(u16::from(f.u8())).ok_or(CaptureError::BadValue(tag))?;
+                let phase = Self::phase(f.u8()).ok_or(CaptureError::BadValue(tag))?;
+                CaptureEvent::Keybind(KeybindInput { action, phase, mouse_grabbed: f.flag() })
+            }
             Self::BIOME_NAME => Self::read_name(&mut f)?,
-            _ => CaptureEvent::Frame(Self::read_frame(&mut f)),
+            _ => return Err(CaptureError::UnknownTag(tag)),
         };
         Ok(event)
     }
@@ -152,6 +154,7 @@ impl CaptureCodec {
             Self::BLOCK => Some(12),
             Self::KEY => Some(7),
             Self::MOUSE => Some(8),
+            Self::KEYBIND => Some(3),
             Self::FRAME => Some(22),
             Self::BIOME_NAME => Some(3 + Self::NAME_BYTES),
             _ => None,
@@ -166,9 +169,8 @@ impl CaptureCodec {
             CaptureEvent::Submit { .. } => Self::SUBMIT,
             CaptureEvent::Column { .. } => Self::COLUMN,
             CaptureEvent::Block { .. } => Self::BLOCK,
-            CaptureEvent::Key(_) => Self::KEY,
-            CaptureEvent::Mouse(_) => Self::MOUSE,
-            CaptureEvent::Frame(_) => Self::FRAME,
+            CaptureEvent::Keybind(_) => Self::KEYBIND,
+            CaptureEvent::Retired(tag) => *tag,
             CaptureEvent::BiomeName { .. } => Self::BIOME_NAME,
         }
     }
@@ -220,24 +222,23 @@ impl CaptureCodec {
         let player =
             PlayerSnapshot { present: f.flag(), x: f.f32(), y: f.f32(), z: f.f32(), yaw: f.f32(), dim: f.i32() };
         // captures do not record deaths
-        TickInput { player, foreground: f.flag(), cursor_hidden: f.flag(), dead: false }
+        TickInput { player, foreground: f.flag(), cursor_hidden: f.flag(), mouse_grabbed: true, ..TickInput::default() }
     }
 
-    fn put_frame(out: &mut Vec<u8>, frame: &FrameInput) {
-        for v in [frame.display.0, frame.display.1, frame.dt, frame.cursor.0, frame.cursor.1] {
-            out.extend_from_slice(&v.to_le_bytes());
+    fn phase_code(phase: KeyPhase) -> u8 {
+        match phase {
+            KeyPhase::Pressed => 0,
+            KeyPhase::Released => 1,
+            KeyPhase::Repeat => 2,
         }
-        out.extend_from_slice(&[u8::from(frame.left_down), u8::from(frame.foreground)]);
     }
 
-    fn read_frame(f: &mut FieldReader<'_>) -> FrameInput {
-        FrameInput {
-            display: (f.f32(), f.f32()),
-            dt: f.f32(),
-            cursor: (f.f32(), f.f32()),
-            left_down: f.flag(),
-            foreground: f.flag(),
-            ..FrameInput::default()
+    fn phase(code: u8) -> Option<KeyPhase> {
+        match code {
+            0 => Some(KeyPhase::Pressed),
+            1 => Some(KeyPhase::Released),
+            2 => Some(KeyPhase::Repeat),
+            _ => None,
         }
     }
 }

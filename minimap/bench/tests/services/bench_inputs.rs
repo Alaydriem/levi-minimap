@@ -32,7 +32,7 @@ fn the_synthetic_capture_opens_the_world_map_and_leaves_at_the_end() {
     assert_eq!(events.last(), Some(&CaptureEvent::Leave));
     let ticks = events.iter().filter(|e| matches!(e, CaptureEvent::Tick(_))).count();
     assert_eq!(ticks, SyntheticCapture::TICKS as usize);
-    assert_eq!(events.iter().filter(|e| matches!(e, CaptureEvent::Key(_))).count(), 2);
+    assert_eq!(events.iter().filter(|e| matches!(e, CaptureEvent::Keybind(_))).count(), 2);
 }
 
 #[test]

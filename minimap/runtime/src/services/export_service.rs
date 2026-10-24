@@ -80,11 +80,17 @@ impl ExportService {
         self.busy.load(Ordering::SeqCst)
     }
 
-    // Err is the message to show
-    pub fn export_view(&self, rgba: Vec<u8>, width: u32, height: u32, dim: i32) -> Result<(), String> {
+    // the regions on screen, composed like an area export; Err is the message to show
+    pub fn export_view(
+        &self,
+        layout: AreaLayout,
+        regions: Vec<RegionPos>,
+        cache: Option<PathBuf>,
+        dim: i32,
+    ) -> Result<(), String> {
         let path = self.path(dim, ExportKind::View)?;
         let epoch = self.epoch.load(Ordering::SeqCst);
-        self.submit(ExportJob::View { path, rgba, width, height, epoch })
+        self.submit(ExportJob::Area { path, layout, regions, cache, dim, epoch })
     }
 
     pub fn export_area(
@@ -111,7 +117,7 @@ impl ExportService {
         if let Some(handle) = Shared::lock(&self.worker).take()
             && handle.join().is_err()
         {
-            log::error!("the export thread panicked");
+            curia::error!("the export thread panicked");
         }
     }
 

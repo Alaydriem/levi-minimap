@@ -18,6 +18,8 @@ serde_json.workspace = true
 tempfile.workspace = true
 
 [dev-dependencies]
+egui.workspace = true
+levi-ui.workspace = true
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
 
 [[bench]]

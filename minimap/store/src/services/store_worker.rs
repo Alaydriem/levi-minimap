@@ -9,7 +9,7 @@ use minimap_core::structs::biome::{BiomePalette, RegionBiomes};
 use minimap_core::structs::pos::RegionPos;
 
 use crate::errors::StoreError;
-use crate::services::{BiomeKeyFile, CachePaths, ConfigFile, Journal, LineFile, RegionFiles, WaypointFile};
+use crate::services::{BiomeKeyFile, CachePaths, Journal, LineFile, RegionFiles, WaypointFile};
 use crate::structs::{JournalRecord, RegionSnapshot, StoreCommand, StoreEvent, StoreSettings};
 
 // runs on the store thread: owns the journals and region files, answers commands with events
@@ -97,9 +97,6 @@ impl StoreWorker {
                     self.emit(StoreEvent::BiomeKeysNotSaved);
                 })
             }
-            StoreCommand::WriteConfig { path, json, keep_invalid_copy } => {
-                ConfigFile::write(&path, &json, keep_invalid_copy)
-            }
             StoreCommand::AppendLine { path, line, truncate } => LineFile::append(&path, &line, truncate),
             StoreCommand::Compact => self.compact_all(),
             StoreCommand::LoadWaypoints { path } => WaypointFile::load(&path).map(|waypoints| {
@@ -109,7 +106,7 @@ impl StoreWorker {
             StoreCommand::ListRegions { dim } => self.list_regions(dim),
         };
         if let Err(error) = result {
-            log::error!("store command failed: {error}");
+            curia::error!("store command failed", { error: error.to_string() });
             self.emit(StoreEvent::Failed(error.to_string()));
         }
     }
@@ -204,7 +201,7 @@ impl StoreWorker {
         };
         let path = CachePaths::biome_keys_file(root);
         let loaded = BiomeKeyFile::load(&path).unwrap_or_else(|error| {
-            log::warn!("biome key file {} not read ({error}); a new table is started", path.display());
+            curia::warn!("biome key file not read; a new table is started", { path: path.display().to_string(), error: error.to_string() });
             None
         });
         let table = match loaded {
@@ -212,10 +209,10 @@ impl StoreWorker {
             None => {
                 let table_id = Self::new_table_id();
                 if let Err(error) = BiomeKeyFile::save(&path, table_id, &[]) {
-                    log::warn!(
-                        "biome key file {} not written ({error}); it is tried again on the next change",
-                        path.display()
-                    );
+                    curia::warn!("biome key file not written; it is tried again on the next change", {
+                        path: path.display().to_string(),
+                        error: error.to_string(),
+                    });
                 }
                 (table_id, Vec::new())
             }
@@ -273,14 +270,14 @@ impl StoreWorker {
         if (oversized || idle)
             && let Err(error) = self.compact_all()
         {
-            log::error!("journal compaction failed: {error}");
+            curia::error!("journal compaction failed", { error: error.to_string() });
         }
     }
 
     fn sync_all(&mut self) {
         for journal in self.journals.values() {
             if let Err(error) = journal.sync() {
-                log::error!("journal sync failed: {error}");
+                curia::error!("journal sync failed", { error: error.to_string() });
             }
         }
         self.dirty_since_sync = false;
@@ -294,7 +291,7 @@ impl StoreWorker {
         }
         self.sync_all();
         if let Err(error) = self.compact_all() {
-            log::error!("journal compaction at shutdown failed: {error}");
+            curia::error!("journal compaction at shutdown failed", { error: error.to_string() });
         }
     }
 
@@ -314,7 +311,7 @@ impl StoreWorker {
 
     fn emit(&self, event: StoreEvent) {
         if self.events.send_timeout(event, Self::EVENT_TIMEOUT).is_err() {
-            log::warn!("store event dropped: the event queue is full");
+            curia::warn!("store event dropped: the event queue is full");
         }
     }
 }

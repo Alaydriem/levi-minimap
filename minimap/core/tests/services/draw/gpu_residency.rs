@@ -59,3 +59,48 @@ fn idle_textures_are_released_and_their_ids_reused() {
     let ResidencyDecision::Upload { tex: again, .. } = gpu.decide(r(5), Some(1), &mut ops) else { panic!() };
     assert_eq!(again, tex);
 }
+
+#[test]
+fn resident_bytes_never_pass_the_budget() {
+    let mut gpu = GpuResidency::new(240, 600, 4096);
+    let mut ops = Vec::new();
+    for frame in 1..=10 {
+        gpu.begin_frame(frame);
+        for x in 0..200 {
+            gpu.decide(RegionPos::new(x, frame as i32, 0), Some(1), &mut ops);
+            assert!(gpu.resident_bytes() <= gpu.budget_bytes());
+        }
+    }
+    assert_eq!(gpu.len(), 240);
+    assert_eq!(gpu.budget_bytes(), 240 * GpuResidency::TILE_BYTES);
+}
+
+#[test]
+fn unloaded_regions_release_their_texture() {
+    let mut gpu = GpuResidency::new(8, 600, 4);
+    let mut ops = Vec::new();
+    gpu.begin_frame(1);
+    let ResidencyDecision::Upload { tex: kept, .. } = gpu.decide(r(0), Some(1), &mut ops) else { panic!() };
+    let ResidencyDecision::Upload { tex: gone, .. } = gpu.decide(r(1), Some(1), &mut ops) else { panic!() };
+    ops.clear();
+
+    gpu.release_unloaded(|region| region == r(0), &mut ops);
+
+    assert_eq!(ops, [TextureOp::Release { tex: gone }]);
+    assert_eq!(gpu.len(), 1);
+    gpu.begin_frame(2);
+    assert_eq!(gpu.decide(r(0), Some(1), &mut ops), ResidencyDecision::Upload { tex: kept, created: false });
+}
+
+#[test]
+fn a_released_id_is_reused() {
+    let mut gpu = GpuResidency::new(8, 600, 4);
+    let mut ops = Vec::new();
+    gpu.begin_frame(1);
+    let ResidencyDecision::Upload { tex, .. } = gpu.decide(r(0), Some(1), &mut ops) else { panic!() };
+    gpu.release_unloaded(|_| false, &mut ops);
+
+    let again = gpu.decide(r(5), Some(1), &mut ops);
+
+    assert_eq!(again, ResidencyDecision::Upload { tex, created: true });
+}

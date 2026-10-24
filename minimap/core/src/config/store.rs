@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default, rename_all = "snake_case")]
 pub struct StoreConfig {
     pub journal_max_mb: i32,
     pub sync_interval_ms: i32,

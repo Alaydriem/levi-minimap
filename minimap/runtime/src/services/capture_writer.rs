@@ -51,7 +51,7 @@ impl CaptureWriter {
         match self.thread.take().map(JoinHandle::join) {
             Some(Ok(Ok(written))) => CaptureReport { written, dropped, finished: true },
             Some(Ok(Err(error))) => {
-                log::warn!("capture not finished: {error}");
+                curia::warn!("capture not finished", { error: error.to_string() });
                 CaptureReport { written: 0, dropped, finished: false }
             }
             _ => CaptureReport { written: 0, dropped, finished: false },

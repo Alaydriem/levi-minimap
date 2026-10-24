@@ -1,10 +1,11 @@
-use egui::epaint::{Mesh, RectShape, Vertex};
-use egui::{Align2, Color32, CornerRadius, FontId, Painter, Pos2, Rect, Shape, Stroke, TextureId, pos2};
-use minimap_core::structs::draw::{DrawCommand, DrawList, SamplerKind, TextAlign};
+use egui::epaint::{Mesh, Vertex};
+use egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Shape, Stroke, TextureId, pos2};
+use minimap_core::structs::draw::{DrawCommand, DrawList, TextAlign};
 
-use crate::map::MapTextureId;
+use crate::map::LayerTextures;
 
-// turns the map painters' draw list (physical pixels, IM_COL32 colours) into egui shapes
+// turns the map painters' draw list (physical pixels, IM_COL32 colours) into egui shapes; an image whose
+// texture the layer does not hold yet is left out
 pub struct DrawListShapes;
 
 impl DrawListShapes {
@@ -16,10 +17,9 @@ impl DrawListShapes {
         Self
     }
 
-    pub fn paint(&mut self, list: &DrawList, painter: &Painter, pixels_per_point: f32) {
+    pub fn paint(&mut self, list: &DrawList, painter: &Painter, pixels_per_point: f32, textures: &LayerTextures) {
         let scale = 1.0 / pixels_per_point.max(f32::EPSILON);
         let at = |p: (f32, f32)| pos2(p.0 * scale, p.1 * scale);
-        let mut sampler = SamplerKind::Point;
         for command in &list.commands {
             match *command {
                 DrawCommand::RectFilled { p0, p1, colour } => {
@@ -51,26 +51,20 @@ impl DrawListShapes {
                     painter.text(at(pos), anchor, text, FontId::proportional(size * scale), Self::colour(colour));
                 }
                 DrawCommand::Image { tex, p0, p1, uv0, uv1 } => {
+                    let Some(id) = textures.id(tex) else { continue };
                     let uv = Rect::from_min_max(pos2(uv0.0, uv0.1), pos2(uv1.0, uv1.1));
-                    let id = MapTextureId::encode(tex, sampler);
                     painter.image(id, Rect::from_two_pos(at(p0), at(p1)), uv, Color32::WHITE);
                 }
-                DrawCommand::ImageRounded { tex, p0, p1, uv0, uv1, rounding } => {
-                    let uv = Rect::from_min_max(pos2(uv0.0, uv0.1), pos2(uv1.0, uv1.1));
-                    let corner = CornerRadius::same((rounding * scale).round().clamp(0.0, 255.0) as u8);
-                    let rect = Rect::from_two_pos(at(p0), at(p1));
-                    let id = MapTextureId::encode(tex, sampler);
-                    painter.add(RectShape::filled(rect, corner, Color32::WHITE).with_texture(id, uv));
-                }
                 DrawCommand::ImageRotated { tex, centre, half, uv0, uv1, angle } => {
-                    let id = MapTextureId::encode(tex, sampler);
+                    let Some(id) = textures.id(tex) else { continue };
                     painter.add(Self::turned(id, at(centre), (half.0 * scale, half.1 * scale), (uv0, uv1), angle));
                 }
                 DrawCommand::ImageDisc { tex, centre, radius, uv_centre, uv_radius, angle } => {
-                    let id = MapTextureId::encode(tex, sampler);
+                    let Some(id) = textures.id(tex) else { continue };
                     painter.add(Self::disc(id, at(centre), radius * scale, uv_centre, uv_radius, angle));
                 }
-                DrawCommand::Sampler(kind) => sampler = kind,
+                // the sampler belongs to the texture now
+                DrawCommand::Sampler(_) => {}
             }
         }
     }

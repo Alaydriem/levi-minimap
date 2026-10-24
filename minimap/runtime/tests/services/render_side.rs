@@ -1,29 +1,37 @@
-use minimap_core::services::ui::MapUi;
-use minimap_core::structs::draw::DrawCommand;
-use minimap_core::structs::input::{KeyInput, MouseInput};
-use minimap_core::structs::mesh::UiDraw;
+use minimap_core::structs::draw::{DrawCommand, TextureGrant, TextureOp};
+use minimap_core::structs::input::{KeyPhase, KeyResult, KeybindAction, KeybindInput};
+use minimap_core::structs::settings::{SettingValue, SettingWrite};
 use minimap_runtime::services::{ExportService, Runtime};
-use minimap_runtime::structs::{FrameInput, FrameOutput};
+use minimap_ui::testing::HarnessEvent;
 
-use crate::support::SyntheticWorld;
+use crate::support::{Painted, SyntheticWorld};
 
-const M: i32 = 0x4D;
-const N: i32 = 0x4E;
-const DISPLAY: (f32, f32) = (1280.0, 720.0);
-const CENTRE: (f32, f32) = (640.0, 360.0);
+const CENTRE: (f32, f32) = SyntheticWorld::CENTRE;
 
 fn frame(world: &mut SyntheticWorld, runtime: &Runtime, cursor: (f32, f32), left: bool, right: bool) {
-    let input = FrameInput {
-        display: DISPLAY,
-        dt: 0.016,
-        cursor,
-        left_down: left,
-        right_down: right,
-        foreground: true,
-        collect_text: true,
-        ..FrameInput::default()
-    };
-    runtime.frame(&input, &mut world.frame);
+    world.paint(runtime, cursor, left, right, &[]);
+}
+
+// a frame with `events` for the world map's layer, then one with none
+fn events(world: &mut SyntheticWorld, runtime: &Runtime, events: &[HarnessEvent]) {
+    world.paint(runtime, CENTRE, false, false, events);
+    world.paint(runtime, CENTRE, false, false, &[]);
+}
+
+// a key pressed and released on the world map's layer
+fn key(world: &mut SyntheticWorld, runtime: &Runtime, code: i32, ctrl: bool) {
+    let down = HarnessEvent::Key { code, down: true, ctrl, shift: false };
+    let up = HarnessEvent::Key { code, down: false, ctrl, shift: false };
+    events(world, runtime, &[down, up]);
+}
+
+fn type_text(world: &mut SyntheticWorld, runtime: &Runtime, text: &str) {
+    let typed: Vec<HarnessEvent> = text.chars().map(HarnessEvent::Text).collect();
+    events(world, runtime, &typed);
+}
+
+fn region_uploads(frame: &Painted) -> usize {
+    frame.textures.iter().filter(|op| matches!(op, TextureOp::Upload { tex, .. } if *tex > 1)).count()
 }
 
 fn click(world: &mut SyntheticWorld, runtime: &Runtime, cursor: (f32, f32), right: bool) {
@@ -44,11 +52,11 @@ fn open_menu(world: &mut SyntheticWorld, runtime: &Runtime, at: (f32, f32)) {
     frame(world, runtime, at, false, false);
 }
 
-fn key(runtime: &Runtime, code: i32, ctrl: bool) -> bool {
-    runtime.key(KeyInput::new(code, true, ctrl, false)).consume
+fn bind(runtime: &Runtime, action: KeybindAction, mouse_grabbed: bool) -> KeyResult {
+    runtime.keybind(KeybindInput { action, phase: KeyPhase::Pressed, mouse_grabbed })
 }
 
-fn draws_text(frame: &FrameOutput, text: &str) -> bool {
+fn draws_text(frame: &Painted, text: &str) -> bool {
     frame.mesh.draws_text(text)
 }
 
@@ -77,7 +85,7 @@ fn click_text(world: &mut SyntheticWorld, runtime: &Runtime, text: &str) {
 }
 
 fn open_world_map(world: &mut SyntheticWorld, runtime: &Runtime) {
-    runtime.key(KeyInput::new(M, true, false, true));
+    bind(runtime, KeybindAction::ToggleWorldMap, true);
     for _ in 0..30 {
         frame(world, runtime, CENTRE, false, false);
     }
@@ -86,8 +94,7 @@ fn open_world_map(world: &mut SyntheticWorld, runtime: &Runtime) {
 // a world with explored chunks around the player and the world map open; exports go to the test folder
 fn explored_map(world: &mut SyntheticWorld) -> Runtime {
     let exports = world.paths().data_dir.join(ExportService::FOLDER);
-    let folder = exports.to_string_lossy().replace('\\', "/");
-    world.write_config(&format!(r#"{{ "export": {{ "folder": "{folder}" }} }}"#));
+    world.config.export.folder = exports.to_string_lossy().into_owned();
     let runtime = world.runtime();
     world.run_until(&runtime, 200, |rt, _| rt.stats().surfaces_resident > 20 && rt.waypoints_loaded());
     open_world_map(world, &runtime);
@@ -101,7 +108,7 @@ fn copied_at_centre(world: &mut SyntheticWorld, runtime: &Runtime) -> String {
     frame(world, runtime, at, false, false);
     frame(world, runtime, at, true, false);
     frame(world, runtime, at, false, false);
-    let copied = world.frame.mesh.clipboard.clone();
+    let copied = runtime.take_clipboard().unwrap_or_default();
     frame(world, runtime, CENTRE, false, false);
     copied
 }
@@ -111,21 +118,13 @@ fn add_here_types_a_name_and_saves_a_waypoint_on_the_clicked_column_at_its_heigh
     let mut world = SyntheticWorld::new();
     let runtime = explored_map(&mut world);
     menu_pick(&mut world, &runtime, "Add waypoint here");
-    assert_ne!(world.frame.cursor_flags & FrameOutput::TEXT_INPUT, 0);
-    for c in "Base".chars() {
-        runtime.text(u32::from(c));
-    }
-    assert!(key(&runtime, M, false));
-    frame(&mut world, &runtime, CENTRE, false, false);
-    assert_ne!(world.frame.cursor_flags & FrameOutput::DRAW_CURSOR, 0);
-    assert!(key(&runtime, ENTER, false));
-    // Enter reaches the dialog in the next UI frame, in order with the typed name
-    frame(&mut world, &runtime, CENTRE, false, false);
+    assert!(draws_text(&world.frame, "New waypoint"));
+    type_text(&mut world, &runtime, "Base");
+    assert!(world.frame.map_open());
+    key(&mut world, &runtime, ENTER, false);
     frame(&mut world, &runtime, CENTRE, false, false);
     let saved = runtime.waypoints();
     assert_eq!(saved.len(), 1, "{:?}", texts(&world.frame));
-    assert_eq!(world.frame.cursor_flags & FrameOutput::TEXT_INPUT, 0);
-    assert_eq!(saved.len(), 1);
     assert_eq!(saved[0].name, "Base");
     assert!((saved[0].x - 8).abs() <= 1 && (saved[0].z - 8).abs() <= 1, "{:?}", saved[0]);
     assert_eq!(saved[0].y, i32::from(SyntheticWorld::height(saved[0].x, saved[0].z)));
@@ -133,12 +132,13 @@ fn add_here_types_a_name_and_saves_a_waypoint_on_the_clicked_column_at_its_heigh
 }
 
 #[test]
-fn copy_coordinates_puts_its_text_in_the_mesh_clipboard() {
+fn copy_coordinates_puts_its_text_on_the_clipboard_once() {
     let mut world = SyntheticWorld::new();
     let runtime = explored_map(&mut world);
     let copied = copied_at_centre(&mut world, &runtime);
     assert!(copied.contains(", ~, "), "{copied}");
     assert!(draws_text(&world.frame, &format!("Copied {copied}")));
+    assert_eq!(runtime.take_clipboard(), None);
     runtime.shutdown();
 }
 
@@ -162,12 +162,12 @@ fn a_marker_under_the_cursor_can_be_removed_and_ctrl_z_brings_it_back() {
     let mut world = SyntheticWorld::new();
     let runtime = world.runtime();
     world.run_until(&runtime, 50, |rt, _| rt.waypoints_loaded());
-    runtime.key(KeyInput::new(N, true, false, true));
+    bind(&runtime, KeybindAction::AddWaypoint, true);
     open_world_map(&mut world, &runtime);
     menu_pick(&mut world, &runtime, "Remove");
     assert!(runtime.waypoints().is_empty());
     assert!(draws_text(&world.frame, "Removed \"Waypoint 1\" - press Ctrl+Z to undo"));
-    assert!(key(&runtime, MapUi::Z, true));
+    key(&mut world, &runtime, Z, true);
     assert_eq!(runtime.waypoints().len(), 1);
     runtime.shutdown();
 }
@@ -177,12 +177,12 @@ fn hiding_waypoints_takes_them_off_the_minimap_too() {
     let mut world = SyntheticWorld::new();
     let runtime = world.runtime();
     world.run_until(&runtime, 50, |rt, _| rt.waypoints_loaded());
-    runtime.key(KeyInput::new(N, true, false, true));
+    bind(&runtime, KeybindAction::AddWaypoint, true);
     world.player.x += 20.0;
     assert!(world.run_until(&runtime, 50, |_, frame| draws_text(frame, "Waypoint 1")));
     open_world_map(&mut world, &runtime);
     menu_pick(&mut world, &runtime, "Hide waypoints");
-    runtime.key(KeyInput::new(M, true, false, false));
+    bind(&runtime, KeybindAction::ToggleWorldMap, false);
     for _ in 0..5 {
         world.tick(&runtime);
         world.draw(&runtime);
@@ -195,11 +195,11 @@ fn hiding_waypoints_takes_them_off_the_minimap_too() {
 #[test]
 fn a_refused_hotkey_says_why_on_the_minimap() {
     let mut world = SyntheticWorld::new();
-    world.write_config(r#"{ "waypoints": { "maxPerWorld": 1 } }"#);
+    world.config.waypoints.max_per_world = 1;
     let runtime = world.runtime();
     world.tick(&runtime);
-    runtime.key(KeyInput::new(N, true, false, true));
-    runtime.key(KeyInput::new(N, true, false, true));
+    bind(&runtime, KeybindAction::AddWaypoint, true);
+    bind(&runtime, KeybindAction::AddWaypoint, true);
     world.draw(&runtime);
     assert!(draws_text(&world.frame, "This world already has 1 waypoints"));
     assert_eq!(runtime.waypoints().len(), 1);
@@ -244,36 +244,57 @@ fn export_explored_area_from_the_menu_writes_every_explored_region() {
     runtime.shutdown();
 }
 
+// the RGBA of one pixel of a PNG
+fn png_pixel(path: &std::path::Path, x: u32, y: u32) -> [u8; 4] {
+    let mut reader =
+        png::Decoder::new(std::io::BufReader::new(std::fs::File::open(path).unwrap())).read_info().unwrap();
+    let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
+    let info = reader.next_frame(&mut pixels).unwrap();
+    let at = ((y * info.width + x) * 4) as usize;
+    [pixels[at], pixels[at + 1], pixels[at + 2], pixels[at + 3]]
+}
+
 #[test]
-fn export_this_view_captures_the_next_frame_without_the_menu_and_saves_the_pixels() {
+fn export_this_view_writes_the_regions_on_screen() {
     let mut world = SyntheticWorld::new();
     let runtime = explored_map(&mut world);
-    // the frame after the click is the captured one
+    world.run_until(&runtime, 500, |rt, _| rt.stats().bakes_completed > 8);
+
     menu_pick(&mut world, &runtime, "Export this view");
-    assert_ne!(world.frame.cursor_flags & FrameOutput::CAPTURE_VIEW, 0);
-    assert!(!draws_text(&world.frame, "Chunk grid"), "the captured view has no tools block");
-    let mesh = &world.frame.mesh;
-    assert!(!world.frame.draw.commands.is_empty() && mesh.vertices.len() > 100, "the captured view has the map");
-    assert!(!mesh.draws_text("Chunk grid") && !mesh.draws_text("Export this view"));
-    assert!(!world.frame.draw.commands.iter().any(|c| matches!(c, DrawCommand::Text { start, len, .. }
-        if world.frame.draw.text_of(*start, *len) == "Export this view")));
-    let (w, h) = (DISPLAY.0 as u32, DISPLAY.1 as u32);
-    let pixels = vec![40u8; (w * h * 4) as usize];
-    runtime.view_captured(&pixels, (w, h), w * 4, 87);
-    frame(&mut world, &runtime, CENTRE, false, false);
-    assert_eq!(world.frame.cursor_flags & FrameOutput::CAPTURE_VIEW, 0);
     let message = wait_for_message(&mut world, &runtime, "Exported ").expect("the export finished");
-    assert_eq!(png_size(&exported_file(&world, &message)), (w, h));
+
+    assert!(message.ends_with("-view.png"), "{message}");
+    let (width, height) = png_size(&exported_file(&world, &message));
+    assert!(width >= 256 && width % 256 == 0 && height % 256 == 0, "{width} x {height}");
     runtime.shutdown();
 }
 
 #[test]
-fn a_capture_in_an_unknown_screen_format_is_refused_with_a_message() {
+fn a_view_export_leaves_unexplored_regions_see_through() {
     let mut world = SyntheticWorld::new();
     let runtime = explored_map(&mut world);
-    runtime.view_captured(&[0; 16], (2, 2), 8, 24);
-    frame(&mut world, &runtime, CENTRE, false, false);
-    assert!(draws_text(&world.frame, "Export failed: the screen format 24 cannot be exported"));
+    world.run_until(&runtime, 500, |rt, _| rt.stats().bakes_completed > 8);
+
+    menu_pick(&mut world, &runtime, "Export this view");
+    let message = wait_for_message(&mut world, &runtime, "Exported ").expect("the export finished");
+
+    let file = exported_file(&world, &message);
+    assert_eq!(png_pixel(&file, 0, 0)[3], 0, "the view's corner is beyond the explored land");
+    runtime.shutdown();
+}
+
+#[test]
+fn a_view_export_respects_max_pixels() {
+    let mut world = SyntheticWorld::new();
+    world.config.export.max_pixels = 256;
+    let runtime = explored_map(&mut world);
+    world.run_until(&runtime, 500, |rt, _| rt.stats().bakes_completed > 8);
+
+    menu_pick(&mut world, &runtime, "Export this view");
+    let message = wait_for_message(&mut world, &runtime, "Exported ").expect("the export finished");
+
+    let (width, height) = png_size(&exported_file(&world, &message));
+    assert!(width <= 256 && height <= 256, "{width} x {height}");
     runtime.shutdown();
 }
 
@@ -282,8 +303,8 @@ fn text_grows_with_a_taller_screen() {
     let mut world = SyntheticWorld::new();
     let runtime = world.runtime();
     world.tick(&runtime);
-    let input = FrameInput { display: (3840.0, 2160.0), dt: 0.016, foreground: true, ..FrameInput::default() };
-    runtime.frame(&input, &mut world.frame);
+    world.display = (3840.0, 2160.0);
+    world.draw(&runtime);
     let sizes: Vec<f32> = world
         .frame
         .draw
@@ -300,11 +321,12 @@ fn text_grows_with_a_taller_screen() {
 
 const ESCAPE: i32 = 0x1B;
 const ENTER: i32 = 0x0D;
-fn texts(frame: &FrameOutput) -> Vec<String> {
+const Z: i32 = 0x5A;
+fn texts(frame: &Painted) -> Vec<String> {
     frame.mesh.text_rects.iter().map(|t| frame.mesh.text_of(t).to_string()).collect()
 }
 
-fn lines(frame: &FrameOutput) -> usize {
+fn lines(frame: &Painted) -> usize {
     frame.draw.commands.iter().filter(|c| matches!(c, DrawCommand::Line { .. })).count()
 }
 
@@ -324,7 +346,7 @@ fn hide_waypoints(world: &mut SyntheticWorld, runtime: &Runtime) {
 // hotkey waypoints at the player, with the map closed
 fn add_hotkey_waypoints(world: &mut SyntheticWorld, runtime: &Runtime, count: usize) {
     for _ in 0..count {
-        runtime.key(KeyInput::new(N, true, false, true));
+        bind(runtime, KeybindAction::AddWaypoint, true);
         world.tick(runtime);
     }
 }
@@ -414,17 +436,6 @@ fn a_click_on_the_tools_block_toggles_the_grid_and_does_not_pan() {
 }
 
 #[test]
-fn toggling_the_grid_is_saved_to_config_json() {
-    let mut world = SyntheticWorld::new();
-    let runtime = explored_map(&mut world);
-    click_text(&mut world, &runtime, "Chunk grid");
-    world.tick(&runtime);
-    runtime.shutdown();
-    let text = std::fs::read_to_string(world.paths().config_file).unwrap();
-    assert!(text.contains("\"showChunkGrid\": true"), "{text}");
-}
-
-#[test]
 fn a_right_click_on_the_tools_block_or_list_opens_no_menu() {
     let mut world = SyntheticWorld::new();
     let runtime = explored_map(&mut world);
@@ -451,7 +462,8 @@ fn a_wheel_turn_over_the_list_scrolls_it_and_does_not_zoom() {
     frame(&mut world, &runtime, row, false, false);
     frame(&mut world, &runtime, row, false, false);
     assert!(draws_text(&world.frame, "Waypoint 1"));
-    assert!(runtime.mouse(MouseInput::new(MouseInput::WHEEL, -120)));
+    let wheel = [HarnessEvent::Wheel(-120), HarnessEvent::Wheel(-120), HarnessEvent::Wheel(-120)];
+    world.paint(&runtime, row, false, false, &wheel);
     for _ in 0..30 {
         frame(&mut world, &runtime, row, false, false);
     }
@@ -504,7 +516,8 @@ fn a_drag_after_a_pick_moves_the_anchor_and_closing_the_map_clears_it() {
     frame(&mut world, &runtime, (768.0, 400.0), false, false);
     let lines = hover(&mut world, &runtime, CENTRE);
     assert!(lines.iter().any(|t| *t == block(72, 8)), "{lines:?}");
-    assert!(key(&runtime, ESCAPE, false));
+    key(&mut world, &runtime, ESCAPE, false);
+    assert!(!runtime.view_flags().world_map_open, "Escape closes the world map");
     open_world_map(&mut world, &runtime);
     let lines = hover(&mut world, &runtime, CENTRE);
     assert!(lines.iter().any(|t| *t == block(8, 8)), "{lines:?}");
@@ -525,13 +538,14 @@ fn hiding_waypoints_keeps_the_list_full() {
 }
 
 #[test]
-fn a_background_window_shows_no_tools_or_hover() {
+fn a_pointer_off_the_window_shows_no_hover() {
     let mut world = SyntheticWorld::new();
     let runtime = explored_map(&mut world);
-    let input = FrameInput { display: DISPLAY, dt: 0.016, cursor: CENTRE, foreground: false, ..FrameInput::default() };
-    runtime.frame(&input, &mut world.frame);
+    world.foreground = false;
+    world.draw(&runtime);
+    world.draw(&runtime);
     let lines = texts(&world.frame);
-    assert!(!lines.iter().any(|t| t == "Chunk grid" || t.starts_with("X ")), "{lines:?}");
+    assert!(!lines.iter().any(|t| t.starts_with("X ")), "{lines:?}");
     runtime.shutdown();
 }
 
@@ -543,24 +557,25 @@ fn the_minimap_reaches_the_mesh_with_its_texture_and_coordinates() {
     for _ in 0..3 {
         frame(&mut world, &runtime, CENTRE, false, false);
     }
-    let mesh = &world.frame.mesh;
-    assert!(mesh.draws.iter().any(|d| d.kind == UiDraw::MAP && d.texture == 1));
-    assert_eq!(world.frame.cursor_flags & FrameOutput::DRAW_CURSOR, 0);
+    assert!(world.frame.mesh.textured().count() > 0, "the corner map draws with its texture");
+    assert!(!world.frame.map_open());
+    assert!(world.frame.hud.rect.is_positive(), "the hud owns the corner map's rect");
     runtime.shutdown();
 }
 
 #[test]
-fn a_world_map_frame_reports_its_ui_build_time() {
+fn a_world_map_frame_owns_the_screen_and_wants_the_arrow() {
     let mut world = SyntheticWorld::new();
     let runtime = explored_map(&mut world);
     frame(&mut world, &runtime, CENTRE, false, false);
-    assert!(world.frame.ui_build_us > 0);
+    assert!(world.frame.overlay.arrow_cursor);
+    assert_eq!(world.frame.overlay.rect.size(), egui::vec2(1280.0, 720.0));
     assert!(world.frame.mesh.text_starting("X "), "the hover lines reach the mesh");
     runtime.shutdown();
 }
 
 #[test]
-fn typing_in_the_search_filters_the_list_and_the_letters_do_not_reach_the_game() {
+fn typing_in_the_search_filters_the_list() {
     let mut world = SyntheticWorld::new();
     let runtime = world.runtime();
     world.run_until(&runtime, 200, |rt, _| rt.stats().surfaces_resident > 20 && rt.waypoints_loaded());
@@ -570,13 +585,11 @@ fn typing_in_the_search_filters_the_list_and_the_letters_do_not_reach_the_game()
     let listed = |world: &SyntheticWorld| texts(&world.frame).iter().filter(|t| *t == "Waypoint 1").count();
     let before = listed(&world);
     click_text(&mut world, &runtime, "Search waypoints");
-    let consumed = key(&runtime, 0x32, false);
-    runtime.text(u32::from('2'));
+    type_text(&mut world, &runtime, "2");
     for _ in 0..3 {
         frame(&mut world, &runtime, CENTRE, false, false);
     }
     let lines = texts(&world.frame);
-    assert!(consumed, "the key went to the search field, not the game");
     assert!(lines.iter().any(|t| t == "Waypoint 2"), "{lines:?}");
     assert_eq!(listed(&world), before - 1, "the search hides the row of Waypoint 1: {lines:?}");
     runtime.shutdown();
@@ -588,7 +601,7 @@ fn a_world_change_drops_the_search_and_a_new_dialog_starts_empty() {
     let runtime = explored_map(&mut world);
     click_text(&mut world, &runtime, "Waypoints");
     click_text(&mut world, &runtime, "Search waypoints");
-    runtime.text(u32::from('q'));
+    type_text(&mut world, &runtime, "q");
     for _ in 0..3 {
         frame(&mut world, &runtime, CENTRE, false, false);
     }
@@ -603,5 +616,156 @@ fn a_world_change_drops_the_search_and_a_new_dialog_starts_empty() {
     assert!(typed && search_cleared);
     assert!(draws_text(&world.frame, "New waypoint"));
     assert!(!texts(&world.frame).iter().any(|t| t == "q"), "the name field starts empty");
+    runtime.shutdown();
+}
+
+#[test]
+fn toolbar_grid_switch_queues_show_chunk_grid() {
+    let mut world = SyntheticWorld::new();
+    let runtime = explored_map(&mut world);
+    let mut out = Vec::new();
+    runtime.take_setting_writes(&mut out);
+
+    click_text(&mut world, &runtime, "Chunk grid");
+    world.tick(&runtime);
+    out.clear();
+    runtime.take_setting_writes(&mut out);
+
+    assert_eq!(out, [SettingWrite { path: "world_map.show_chunk_grid", value: SettingValue::Bool(true) }]);
+    runtime.shutdown();
+}
+
+#[test]
+fn the_hud_paints_the_corner_map_and_the_overlay_nothing_while_the_map_is_closed() {
+    let mut world = SyntheticWorld::new();
+    let runtime = world.runtime();
+    world.run_until(&runtime, 200, |rt, _| rt.stats().surfaces_resident > 20);
+
+    world.draw(&runtime);
+
+    assert!(world.frame.hud.rect.is_positive() && !world.frame.map_open());
+    assert_eq!(world.frame.overlay, minimap_runtime::structs::LayerReply::EMPTY);
+    runtime.shutdown();
+}
+
+#[test]
+fn the_overlay_paints_the_world_map_and_the_hud_nothing_while_it_is_open() {
+    let mut world = SyntheticWorld::new();
+    let runtime = explored_map(&mut world);
+
+    world.draw(&runtime);
+
+    assert!(world.frame.map_open());
+    assert_eq!(world.frame.hud, minimap_runtime::structs::LayerReply::EMPTY);
+    assert!(draws_text(&world.frame, "Chunk grid"));
+    runtime.shutdown();
+}
+
+#[test]
+fn a_toast_shows_on_the_hud_when_closed_and_on_the_overlay_when_open() {
+    let mut world = SyntheticWorld::new();
+    let runtime = world.runtime();
+    world.tick(&runtime);
+    bind(&runtime, KeybindAction::ToggleCave, true);
+    world.draw(&runtime);
+    let on_hud = draws_text(&world.frame, "Cave view on") && !world.frame.map_open();
+
+    open_world_map(&mut world, &runtime);
+    bind(&runtime, KeybindAction::ToggleCave, false);
+    world.draw(&runtime);
+
+    assert!(on_hud);
+    assert!(world.frame.map_open() && draws_text(&world.frame, "Cave view off"), "{:?}", texts(&world.frame));
+    runtime.shutdown();
+}
+
+// frames with the world map open until a region tile is uploaded; true when one was
+fn wait_for_region_upload(world: &mut SyntheticWorld, runtime: &Runtime) -> bool {
+    for _ in 0..300 {
+        world.tick(runtime);
+        world.draw(runtime);
+        if region_uploads(&world.frame) > 0 {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    false
+}
+
+#[test]
+fn a_new_overlay_context_uploads_the_visible_tiles_again() {
+    let mut world = SyntheticWorld::new();
+    let runtime = explored_map(&mut world);
+    assert!(wait_for_region_upload(&mut world, &runtime));
+    for _ in 0..30 {
+        world.draw(&runtime);
+    }
+
+    world.overlay.replace_context();
+
+    assert!(wait_for_region_upload(&mut world, &runtime), "the tiles go to the new context");
+    runtime.shutdown();
+}
+
+#[test]
+fn textures_lost_uploads_the_visible_tiles_and_the_corner_map_again() {
+    let mut world = SyntheticWorld::new();
+    let runtime = explored_map(&mut world);
+    assert!(wait_for_region_upload(&mut world, &runtime));
+    for _ in 0..30 {
+        world.draw(&runtime);
+    }
+
+    runtime.textures_lost();
+
+    assert!(wait_for_region_upload(&mut world, &runtime), "the region tiles are uploaded again");
+    runtime.shutdown();
+}
+
+#[test]
+fn zoomed_out_tiles_stay_inside_a_small_grant() {
+    let mut world = SyntheticWorld::new();
+    world.grant = TextureGrant { bytes: 16 * 1024 * 1024 + 512 * 1024, count: 4096 };
+    let runtime = explored_map(&mut world);
+    assert!(world.run_until(&runtime, 500, |rt, _| rt.stats().tiles_resident > 2), "{:?}", runtime.stats());
+
+    for _ in 0..100 {
+        world.paint(&runtime, CENTRE, false, false, &[HarnessEvent::Wheel(-120)]);
+        assert!(runtime.stats().gpu_textures <= 3, "{:?}", runtime.stats());
+    }
+
+    runtime.shutdown();
+}
+
+#[test]
+fn a_keybind_while_typing_in_the_search_does_not_close_the_map() {
+    let mut world = SyntheticWorld::new();
+    let runtime = explored_map(&mut world);
+    click_text(&mut world, &runtime, "Waypoints");
+    click_text(&mut world, &runtime, "Search waypoints");
+    type_text(&mut world, &runtime, "m");
+
+    let toggled = bind(&runtime, KeybindAction::ToggleWorldMap, false);
+    let cave = bind(&runtime, KeybindAction::ToggleCave, false);
+
+    assert!(runtime.view_flags().world_map_open, "the typed M does not close the map");
+    assert_eq!(toggled, KeyResult::default());
+    assert!(!cave.toggle_cave, "the typed K does not switch cave view");
+    runtime.shutdown();
+}
+
+#[test]
+fn a_keybind_closes_the_map_again_once_the_search_lets_go_of_the_keyboard() {
+    let mut world = SyntheticWorld::new();
+    let runtime = explored_map(&mut world);
+    click_text(&mut world, &runtime, "Waypoints");
+    click_text(&mut world, &runtime, "Search waypoints");
+    type_text(&mut world, &runtime, "m");
+    click(&mut world, &runtime, CENTRE, false);
+    frame(&mut world, &runtime, CENTRE, false, false);
+
+    bind(&runtime, KeybindAction::ToggleWorldMap, false);
+
+    assert!(!runtime.view_flags().world_map_open);
     runtime.shutdown();
 }

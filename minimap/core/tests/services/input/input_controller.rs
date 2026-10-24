@@ -1,80 +1,199 @@
 use minimap_core::config::Config;
 use minimap_core::services::input::InputController;
-use minimap_core::structs::input::{KeyInput, MouseAction, MouseInput};
+use minimap_core::structs::input::{KeyPhase, KeyResult, KeybindAction, KeybindInput};
 use minimap_core::structs::view::ViewState;
-
-const M: i32 = 0x4D;
-const EQUALS: i32 = 0xBB;
-const MINUS: i32 = 0xBD;
 
 fn controller() -> InputController {
     InputController::new(&Config::default())
 }
 
-#[test]
-fn the_toggle_key_opens_the_world_map_only_while_the_game_holds_the_mouse() {
-    let mut view = ViewState::new(5);
-    let typing = controller().on_key(&mut view, KeyInput::new(M, true, false, false));
-    assert!(!typing.consume);
-    assert!(!view.world_map_open);
-    view.offset_x = 40.0;
-    let open = controller().on_key(&mut view, KeyInput::new(M, true, false, true));
-    assert!(open.consume);
-    assert_eq!(open.action, MouseAction::ReleaseMouse);
-    assert!(view.world_map_open);
-    assert_eq!(view.offset_x, 0.0);
+fn press(action: KeybindAction) -> KeybindInput {
+    KeybindInput { action, phase: KeyPhase::Pressed, mouse_grabbed: true }
+}
+
+fn in_chat(action: KeybindAction) -> KeybindInput {
+    KeybindInput { mouse_grabbed: false, ..press(action) }
+}
+
+fn open_map() -> ViewState {
+    ViewState { world_map_open: true, ..ViewState::new(5) }
 }
 
 #[test]
-fn ctrl_and_the_toggle_key_hide_the_minimap_in_either_state() {
+fn toggle_world_map_opens_the_map_and_resets_the_view() {
+    let mut view = ViewState { offset_x: 40.0, anchor: Some((5.0, 5.0)), ..ViewState::new(5) };
+
+    controller().on_keybind(&mut view, press(KeybindAction::ToggleWorldMap));
+
+    assert!(view.world_map_open);
+    assert_eq!((view.offset_x, view.anchor), (0.0, None));
+}
+
+#[test]
+fn toggle_world_map_closes_the_open_map_and_clears_the_anchor() {
+    let mut view = ViewState { anchor: Some((7.0, 7.0)), ..open_map() };
+
+    controller().on_keybind(&mut view, in_chat(KeybindAction::ToggleWorldMap));
+
+    assert!(!view.world_map_open);
+    assert_eq!(view.anchor, None);
+}
+
+#[test]
+fn toggle_minimap_works_on_either_view() {
     let mut view = ViewState::new(5);
-    controller().on_key(&mut view, KeyInput::new(M, true, true, true));
+    controller().on_keybind(&mut view, press(KeybindAction::ToggleMinimap));
     assert!(!view.show_minimap);
-    view.world_map_open = true;
-    let result = controller().on_key(&mut view, KeyInput::new(M, true, true, false));
-    assert!(view.show_minimap);
-    assert!(view.world_map_open);
-    assert_eq!(result.action, MouseAction::None);
+
+    let mut map = open_map();
+    controller().on_keybind(&mut map, in_chat(KeybindAction::ToggleMinimap));
+    assert!(!map.show_minimap && map.world_map_open);
 }
 
 #[test]
-fn the_open_map_takes_every_key_down_and_closes_on_toggle_or_escape() {
-    let mut view = ViewState { world_map_open: true, ..ViewState::new(5) };
-    let other = controller().on_key(&mut view, KeyInput::new(0x57, true, false, false));
-    assert!(other.consume);
-    assert!(view.world_map_open);
-    let release = controller().on_key(&mut view, KeyInput::new(0x57, false, false, false));
-    assert!(!release.consume);
-    let escape = controller().on_key(&mut view, KeyInput::new(InputController::ESCAPE, true, false, false));
-    assert_eq!(escape.action, MouseAction::GrabMouse);
-    assert!(!view.world_map_open);
-}
-
-#[test]
-fn zoom_keys_change_the_radius_within_its_limits() {
+fn zoom_changes_the_radius_within_its_limits() {
     let mut view = ViewState::new(3);
-    let zoom_in = controller().on_key(&mut view, KeyInput::new(EQUALS, true, false, true));
-    assert!(zoom_in.consume && zoom_in.radius_changed);
+    let zoom_in = controller().on_keybind(&mut view, press(KeybindAction::ZoomIn));
+    assert!(zoom_in.radius_changed);
     assert_eq!(view.minimap_radius, 2);
-    let at_limit = controller().on_key(&mut view, KeyInput::new(EQUALS, true, false, true));
-    assert!(at_limit.consume && !at_limit.radius_changed);
+
+    let at_limit = controller().on_keybind(&mut view, press(KeybindAction::ZoomIn));
+    assert!(!at_limit.radius_changed);
     assert_eq!(view.minimap_radius, 2);
+
     view.minimap_radius = 16;
-    controller().on_key(&mut view, KeyInput::new(MINUS, true, false, true));
+    controller().on_keybind(&mut view, press(KeybindAction::ZoomOut));
     assert_eq!(view.minimap_radius, 16);
 }
 
 #[test]
-fn the_wheel_zooms_the_open_map_within_its_limits_and_is_consumed() {
-    let mut view = ViewState { world_map_open: true, ..ViewState::new(5) };
-    assert!(controller().on_mouse(&mut view, MouseInput::new(MouseInput::WHEEL, 1)));
-    assert!((view.zoom - 1.15).abs() < 1e-6);
-    for _ in 0..200 {
-        controller().on_mouse(&mut view, MouseInput::new(MouseInput::WHEEL, -120));
+fn zoom_repeats_while_held() {
+    let mut view = ViewState::new(8);
+    let repeat = KeybindInput { phase: KeyPhase::Repeat, ..press(KeybindAction::ZoomOut) };
+
+    controller().on_keybind(&mut view, repeat);
+    controller().on_keybind(&mut view, repeat);
+
+    assert_eq!(view.minimap_radius, 10);
+}
+
+#[test]
+fn zoom_and_add_waypoint_do_nothing_on_the_open_map() {
+    let mut view = open_map();
+
+    let zoom = controller().on_keybind(&mut view, press(KeybindAction::ZoomIn));
+    let add = controller().on_keybind(&mut view, press(KeybindAction::AddWaypoint));
+
+    assert_eq!((zoom, add), (KeyResult::default(), KeyResult::default()));
+    assert_eq!(view.minimap_radius, 5);
+}
+
+#[test]
+fn add_waypoint_asks_for_a_waypoint_on_the_game_view() {
+    let mut view = ViewState::new(5);
+
+    assert!(controller().on_keybind(&mut view, press(KeybindAction::AddWaypoint)).add_waypoint);
+}
+
+#[test]
+fn chat_open_ignores_add_waypoint_and_cave() {
+    let mut view = ViewState::new(5);
+
+    let add = controller().on_keybind(&mut view, in_chat(KeybindAction::AddWaypoint));
+    let cave = controller().on_keybind(&mut view, in_chat(KeybindAction::ToggleCave));
+    let zoom = controller().on_keybind(&mut view, in_chat(KeybindAction::ZoomIn));
+    let open = controller().on_keybind(&mut view, in_chat(KeybindAction::ToggleWorldMap));
+
+    assert_eq!([add, cave, zoom, open], [KeyResult::default(); 4]);
+    assert_eq!((view.minimap_radius, view.world_map_open), (5, false));
+}
+
+#[test]
+fn add_waypoint_is_ignored_when_waypoints_are_disabled() {
+    let mut config = Config::default();
+    config.waypoints.enabled = false;
+    let mut view = ViewState::new(5);
+
+    let result = InputController::new(&config).on_keybind(&mut view, press(KeybindAction::AddWaypoint));
+
+    assert!(!result.add_waypoint);
+}
+
+#[test]
+fn toggle_cave_works_on_either_view() {
+    let mut view = ViewState::new(5);
+    assert!(controller().on_keybind(&mut view, press(KeybindAction::ToggleCave)).toggle_cave);
+
+    let mut map = open_map();
+    assert!(controller().on_keybind(&mut map, in_chat(KeybindAction::ToggleCave)).toggle_cave);
+}
+
+#[test]
+fn toggle_coordinates_works_on_either_view() {
+    let mut view = ViewState::new(5);
+    let hide = controller().on_keybind(&mut view, press(KeybindAction::ToggleCoordinates));
+    assert!(hide.coordinates_changed && !view.show_coordinates);
+
+    let mut map = ViewState { show_coordinates: false, ..open_map() };
+    let show = controller().on_keybind(&mut map, in_chat(KeybindAction::ToggleCoordinates));
+    assert!(show.coordinates_changed && map.show_coordinates);
+}
+
+#[test]
+fn released_never_acts() {
+    for action in KeybindAction::ALL {
+        let mut view = ViewState::new(5);
+        let released = KeybindInput { phase: KeyPhase::Released, ..press(action) };
+
+        let result = controller().on_keybind(&mut view, released);
+
+        assert_eq!(result, KeyResult::default(), "{action:?}");
+        assert_eq!(view, ViewState::new(5), "{action:?}");
     }
+}
+
+#[test]
+fn repeat_acts_only_for_zoom() {
+    for action in [KeybindAction::ToggleWorldMap, KeybindAction::ToggleMinimap, KeybindAction::ToggleCave] {
+        let mut view = ViewState::new(5);
+        let repeat = KeybindInput { phase: KeyPhase::Repeat, ..press(action) };
+
+        controller().on_keybind(&mut view, repeat);
+
+        assert_eq!(view, ViewState::new(5), "{action:?}");
+    }
+}
+
+#[test]
+fn closing_the_world_map_clears_the_anchor() {
+    let mut view = ViewState { anchor: Some((7.0, 7.0)), ..open_map() };
+
+    InputController::close_world_map(&mut view);
+
+    assert!(!view.world_map_open);
+    assert_eq!(view.anchor, None);
+}
+
+#[test]
+fn wheel_zooms_by_zoom_step_per_line_and_clamps() {
+    let mut view = open_map();
+    controller().on_wheel(&mut view, 1.0);
+    assert!((view.zoom - 1.15).abs() < 1e-6);
+
+    controller().on_wheel(&mut view, -2.0);
+    assert!((view.zoom - 1.0 / 1.15).abs() < 1e-5, "{}", view.zoom);
+
+    controller().on_wheel(&mut view, -200.0);
     assert!((view.zoom - 0.2).abs() < 1e-6);
-    view.world_map_open = false;
-    assert!(!controller().on_mouse(&mut view, MouseInput::new(MouseInput::WHEEL, 1)));
+}
+
+#[test]
+fn wheel_does_nothing_on_a_closed_map() {
+    let mut view = ViewState::new(5);
+
+    controller().on_wheel(&mut view, 3.0);
+
+    assert_eq!(view.zoom, ViewState::new(5).zoom);
 }
 
 #[test]
@@ -94,78 +213,10 @@ fn on_a_turned_map_the_drag_still_moves_the_map_under_the_cursor() {
     assert!((view.offset_z - 5.0).abs() < 1e-4, "{}", view.offset_z);
 }
 
-const N: i32 = 0x4E;
-
-#[test]
-fn the_waypoint_key_asks_for_a_waypoint_only_on_the_open_game_view() {
-    let mut view = ViewState::new(5);
-    let added = controller().on_key(&mut view, KeyInput::new(N, true, false, true));
-    assert!(added.consume && added.add_waypoint);
-    let typing = controller().on_key(&mut view, KeyInput::new(N, true, false, false));
-    assert!(!typing.consume && !typing.add_waypoint);
-    let with_ctrl = controller().on_key(&mut view, KeyInput::new(N, true, true, true));
-    assert!(!with_ctrl.add_waypoint);
-    let released = controller().on_key(&mut view, KeyInput::new(N, false, false, true));
-    assert!(!released.add_waypoint);
-    view.world_map_open = true;
-    let on_the_map = controller().on_key(&mut view, KeyInput::new(N, true, false, false));
-    assert!(on_the_map.consume && !on_the_map.add_waypoint);
-}
-
-#[test]
-fn with_waypoints_turned_off_the_waypoint_key_is_left_to_the_game() {
-    let mut config = Config::default();
-    config.waypoints.enabled = false;
-    let mut view = ViewState::new(5);
-    let result = InputController::new(&config).on_key(&mut view, KeyInput::new(N, true, false, true));
-    assert!(!result.consume && !result.add_waypoint);
-}
-
-const K: i32 = 0x4B;
-
-#[test]
-fn the_cave_key_toggles_on_the_game_view_and_on_the_open_map() {
-    let mut view = ViewState::new(5);
-    let game = controller().on_key(&mut view, KeyInput::new(K, true, false, true));
-    assert!(game.consume && game.toggle_cave);
-    let typing = controller().on_key(&mut view, KeyInput::new(K, true, false, false));
-    assert!(!typing.toggle_cave);
-    view.world_map_open = true;
-    let map = controller().on_key(&mut view, KeyInput::new(K, true, false, false));
-    assert!(map.consume && map.toggle_cave && view.world_map_open);
-}
-
-#[test]
-fn ctrl_k_shows_and_hides_the_coordinates_on_either_view_and_plain_k_stays_the_cave_key() {
-    let mut view = ViewState::new(5);
-    let hide = controller().on_key(&mut view, KeyInput::new(K, true, true, true));
-    assert!(hide.consume && hide.coordinates_changed && !hide.toggle_cave);
-    assert!(!view.show_coordinates);
-    view.world_map_open = true;
-    let show = controller().on_key(&mut view, KeyInput::new(K, true, true, false));
-    assert!(show.coordinates_changed && view.show_coordinates && view.world_map_open);
-    let cave = controller().on_key(&mut view, KeyInput::new(K, true, false, false));
-    assert!(cave.toggle_cave && !cave.coordinates_changed);
-}
-
-const ESCAPE: i32 = 0x1B;
-
 #[test]
 fn a_drag_moves_the_anchor_and_not_the_offset() {
     let mut view = ViewState { world_map_open: true, anchor: Some((0.0, 0.0)), zoom: 2.0, ..ViewState::new(5) };
     controller().on_drag(&mut view, 10.0, -4.0, 0.0);
     assert_eq!(view.anchor, Some((-5.0, 2.0)));
     assert_eq!((view.offset_x, view.offset_z), (0.0, 0.0));
-}
-
-#[test]
-fn opening_and_closing_the_map_clears_the_anchor() {
-    let mut view = ViewState { anchor: Some((5.0, 5.0)), ..ViewState::new(5) };
-    controller().on_key(&mut view, KeyInput::new(M, true, false, true));
-    assert!(view.world_map_open);
-    assert_eq!(view.anchor, None);
-    view.anchor = Some((7.0, 7.0));
-    controller().on_key(&mut view, KeyInput::new(ESCAPE, true, false, false));
-    assert!(!view.world_map_open);
-    assert_eq!(view.anchor, None);
 }

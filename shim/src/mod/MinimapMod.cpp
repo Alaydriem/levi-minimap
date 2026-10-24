@@ -2,9 +2,6 @@
 
 #include "bridge/RustBridge.h"
 #include "hooks/ClientUpdateHook.h"
-#include "hooks/UIRenderHook.h"
-#include "input/InputListeners.h"
-#include "render/DX11Hook.h"
 #include "world/WorldTracker.h"
 
 #include "ll/api/mod/RegisterHelper.h"
@@ -16,32 +13,42 @@ MinimapMod& MinimapMod::getInstance() {
     return instance;
 }
 
+// load() runs under the OS loader lock, so it only notes the folders; nothing starts a thread here
 bool MinimapMod::load() {
     auto& self = getSelf();
-    auto  configFile = self.getConfigDir() / "config.json";
-    auto  dataDir    = self.getDataDir();
-    if (!RustBridge::create(configFile, dataDir)) {
-        self.getLogger().error("levi-minimap could not start its Rust core");
-        return false;
-    }
-    ClientUpdateHook::hook();
-    UIRenderHook::hook();
+    mConfigDir = std::filesystem::absolute(self.getConfigDir());
+    mDataDir   = std::filesystem::absolute(self.getDataDir());
     return true;
 }
 
 bool MinimapMod::enable() {
-    InputListeners::registerListeners();
+    LmStatus status = RustBridge::create(mConfigDir, mDataDir);
+    if (status != LM_STATUS_OK) {
+        // without a registration there is no manager log, so this one line goes to the LeviLamina console
+        if (status == LM_STATUS_MANAGER_MISSING) {
+            getSelf().getLogger().error("alaydriem-mod-manager is not loaded, the minimap stays inert");
+        } else if (status == LM_STATUS_REGISTER_FAILED) {
+            getSelf().getLogger().error("the mod manager refused the minimap, the minimap stays inert");
+        } else {
+            getSelf().getLogger().error(
+                "the minimap could not start (status {}), see the mod manager log; the minimap stays inert",
+                static_cast<int>(status)
+            );
+        }
+        return true;
+    }
+    mRegistered = true;
+    ClientUpdateHook::hook();
     return true;
 }
 
+// the hook goes first, so no new tick enters Rust; then the session unregisters and the runtime stops
 bool MinimapMod::disable() {
-    InputListeners::unregisterListeners();
-    // unhook first so no game or render call can enter Rust, then stop Rust
+    if (!mRegistered) return true;
     ClientUpdateHook::unhook();
-    UIRenderHook::unhook();
-    WorldTracker::detach();
-    DX11Hook::shutdown();
+    WorldTracker::reset();
     RustBridge::destroy();
+    mRegistered = false;
     return true;
 }
 

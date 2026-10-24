@@ -1,45 +1,66 @@
-use egui::{Align, Align2, Area, Context, Id, Label, Layout, Order, RichText, Sense, Ui, pos2, vec2};
+use egui::{Align2, Area, Context, Order, Rect, RichText, Sense, Ui, pos2, vec2};
+use levi_i18n::text::Text;
+use levi_ui::draw::{Corner, Draw, TextFit, TextStyle, TypeSize};
+use levi_ui::font::FontFace;
+use levi_ui::icon::{Icon, IconSize};
+use levi_ui::tokens::rule::Elevation;
+use levi_ui::tokens::{ColorToken, SpacingToken, color, spacing};
+use levi_ui::widget::{Surface, SurfaceLevel};
 use minimap_core::services::draw::OverlayGate;
 use minimap_core::services::ui::DimensionName;
 use minimap_core::structs::ui::{MapAction, UiFrame};
 
-use crate::theme::{Icon, Metrics, StudioPalette, Typeface};
-use crate::views::HoverView;
-use crate::widgets::{CardFrame, Draw, Toggle};
+use crate::id::MinimapUiId;
+use crate::message::MinimapMessage;
+use crate::views::{Caption, HoverView, SplitRow, ToggleRow, Words};
 
 // the top-left card: the dimension, the overlay switches, the waypoint list switch and what is
 // under the cursor
 pub struct ToolsView;
 
 impl ToolsView {
-    pub const ZOOM_IN: &'static str = "zoom in";
+    /// The width of the tools card and of the waypoint list under it. Paper draws no minimap card.
+    pub const WIDTH: f32 = 300.0;
+    // the card titles: Paper has no 16 px size, so the label size (15.5)
+    pub const TITLE: TextStyle = TextStyle::new(TypeSize::Label, FontFace::Semibold);
+    const ROW: TextStyle = TextStyle::new(TypeSize::Body, FontFace::Regular);
+    const NOTE: TextStyle = TextStyle::new(TypeSize::Note, FontFace::Regular);
+    const WAYPOINTS_ROW: f32 = 32.0;
+    // the count badge on the waypoint list switch
+    const COUNT_BADGE: egui::Vec2 = vec2(28.0, 18.0);
 
     // returns the card's bottom edge, where the waypoint list starts
     pub fn show(ctx: &Context, frame: &UiFrame<'_>, actions: &mut Vec<MapAction>) -> f32 {
-        let area =
-            Area::new(Id::unique("lm.tools")).fixed_pos(pos2(Metrics::GAP_L, Metrics::GAP_L)).order(Order::Middle);
+        let gap = <spacing::L as SpacingToken>::VALUE;
+        let small = <spacing::S as SpacingToken>::VALUE;
+        let area = Area::new(MinimapUiId::Tools.id()).fixed_pos(pos2(gap, gap)).order(Order::Foreground);
         let shown = area.show(ctx, |ui| {
-            CardFrame::card().show(ui, |ui| {
-                ui.set_width(Metrics::TOOLS_WIDTH - f32::from(CardFrame::PADDING) * 2.0);
+            let card = Surface::frame(SurfaceLevel::Card, Elevation::Floating);
+            let inner = Self::WIDTH - card.total_margin().sum().x;
+            card.show(ui, |ui| {
+                ui.set_width(inner);
                 Self::header(ui, frame.dim);
-                ui.add_space(Metrics::GAP_S);
-                Self::caps(ui, "Overlays");
+                ui.add_space(small);
+                Caption::show(ui, &Text::message(MinimapMessage::Overlays));
                 let gated = !OverlayGate::open(frame.view.zoom);
-                if Self::toggle_row(ui, "Chunk grid", frame.view.show_chunk_grid, gated) {
+                let note = gated.then(|| Text::message(MinimapMessage::ZoomIn));
+                let mut grid = frame.view.show_chunk_grid;
+                if ToggleRow::new(Text::message(MinimapMessage::ChunkGrid), &mut grid).note(note.clone()).show(ui) {
                     actions.push(MapAction::ToggleGrid);
                 }
+                let mut slime = frame.view.show_slime_chunks;
                 if frame.dim == DimensionName::OVERWORLD
-                    && Self::toggle_row(ui, "Slime chunks", frame.view.show_slime_chunks, gated)
+                    && ToggleRow::new(Text::message(MinimapMessage::SlimeChunks), &mut slime).note(note).show(ui)
                 {
                     actions.push(MapAction::ToggleSlime);
                 }
                 if Self::waypoints_row(ui, frame.in_dimension, frame.ui.list_open()) {
                     actions.push(MapAction::ToggleList);
                 }
-                ui.add_space(Metrics::GAP_S);
+                ui.add_space(small);
                 ui.separator();
-                ui.add_space(Metrics::GAP_S);
-                Self::caps(ui, "Under cursor");
+                ui.add_space(small);
+                Caption::show(ui, &Text::message(MinimapMessage::UnderCursor));
                 HoverView::show(ui, frame.hover);
             });
         });
@@ -47,65 +68,60 @@ impl ToolsView {
     }
 
     fn header(ui: &mut Ui, dim: i32) {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("World map").font(Typeface::semibold(16.0)).color(StudioPalette::TEXT));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let name = RichText::new(DimensionName::of(dim)).font(Typeface::ui(Typeface::SMALL_SIZE));
-                ui.label(name.color(StudioPalette::TEXT_DIM));
-            });
-        });
-    }
-
-    pub fn caps(ui: &mut Ui, text: &str) {
-        let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 16.0), Sense::hover());
-        Draw::caps(ui.painter(), rect.left_center(), Align2::LEFT_CENTER, text, StudioPalette::TEXT_FAINT);
-    }
-
-    // a label with a switch at the right; true when the label or the switch was clicked
-    fn toggle_row(ui: &mut Ui, label: &str, on: bool, gated: bool) -> bool {
-        let mut value = on;
-        ui.horizontal(|ui| {
-            ui.set_min_height(Metrics::ROW);
-            let text = RichText::new(label).font(Typeface::body()).color(StudioPalette::TEXT);
-            let label_clicked = ui.add(Label::new(text).sense(Sense::click()).selectable(false)).clicked();
-            if gated {
-                let hint = RichText::new(Self::ZOOM_IN).font(Typeface::ui(12.5)).color(StudioPalette::TEXT_FAINT);
-                ui.label(hint);
-            }
-            let switched =
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| Toggle::show(ui, &mut value).clicked());
-            label_clicked || switched.inner
-        })
-        .inner
+        SplitRow::show(
+            ui,
+            |ui| {
+                // the dimension name comes from minimap-core and stays English for now
+                let name = RichText::new(DimensionName::of(dim))
+                    .font(Self::NOTE.font_id())
+                    .color(<color::TextDim as ColorToken>::VALUE);
+                ui.label(name);
+            },
+            |ui| {
+                let title = Text::message(MinimapMessage::WorldMap);
+                ui.label(Words::rich(ui, &title, Self::TITLE, <color::Text as ColorToken>::VALUE));
+            },
+        );
     }
 
     // the waypoint list switch: an icon, the label, the count and a chevron; true when clicked
     fn waypoints_row(ui: &mut Ui, count: usize, open: bool) -> bool {
-        let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
+        let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), Self::WAYPOINTS_ROW), Sense::click());
         let painter = ui.painter();
-        let row = rect.expand2(vec2(Metrics::GAP_S * 0.75, 0.0));
+        let row = rect.expand2(vec2(<spacing::S as SpacingToken>::VALUE * 0.75, 0.0));
         if open {
-            Draw::fill(painter, row, Metrics::RADIUS_CONTROL, StudioPalette::ACCENT_SOFT);
+            Draw::fill(painter, row, Corner::Control, <color::AccentSoft as ColorToken>::VALUE);
         } else if response.hovered() {
-            Draw::fill(painter, row, Metrics::RADIUS_CONTROL, StudioPalette::BG_HOVER);
+            Draw::fill(painter, row, Corner::Control, <color::BgHover as ColorToken>::VALUE);
         }
-        let icon = if open { StudioPalette::ACCENT } else { StudioPalette::TEXT_DIM };
+        let icon = if open { <color::Accent as ColorToken>::VALUE } else { <color::TextDim as ColorToken>::VALUE };
         let y = rect.center().y;
-        Draw::icon(painter, pos2(rect.left() + 8.0, y), Icon::PIN, 15.0, icon);
-        let label = pos2(rect.left() + 26.0, y);
-        Draw::text(painter, label, Align2::LEFT_CENTER, "Waypoints", Typeface::body(), StudioPalette::TEXT);
-        let badge = egui::Rect::from_center_size(pos2(rect.right() - 36.0, y), vec2(28.0, 18.0));
-        Draw::fill(painter, badge, 9, StudioPalette::BG_FIELD);
-        let count = count.to_string();
+        let side = IconSize::Regular.points();
+        Icon::Pin.paint(
+            painter,
+            Rect::from_center_size(pos2(rect.left() + 8.0, y), vec2(side, side)),
+            IconSize::Regular,
+            icon,
+        );
+        let badge = Rect::from_center_size(pos2(rect.right() - 36.0, y), Self::COUNT_BADGE);
+        let text = <color::Text as ColorToken>::VALUE;
+        let room = badge.left() - 8.0 - (rect.left() + 26.0);
+        let label = Text::message(MinimapMessage::Waypoints);
         Draw::text(
             painter,
-            badge.center(),
-            Align2::CENTER_CENTER,
-            &count,
-            Typeface::mono(12.0),
-            StudioPalette::TEXT_DIM,
+            pos2(rect.left() + 26.0, y),
+            Align2::LEFT_CENTER,
+            &label,
+            Self::ROW,
+            text,
+            TextFit::Truncate(room),
         );
-        Draw::icon(painter, pos2(rect.right() - 8.0, y), Icon::CHEVRON, 12.0, StudioPalette::TEXT_DIM);
+        Draw::fill(painter, badge, Corner::Full, <color::BgField as ColorToken>::VALUE);
+        let dim = <color::TextDim as ColorToken>::VALUE;
+        painter.text(badge.center(), Align2::CENTER_CENTER, count.to_string(), FontFace::Regular.id(12.0), dim);
+        let small = IconSize::Small.points();
+        let chevron = Rect::from_center_size(pos2(rect.right() - 8.0, y), vec2(small, small));
+        Icon::Chevron.paint(painter, chevron, IconSize::Small, dim);
         response.clicked()
     }
 }

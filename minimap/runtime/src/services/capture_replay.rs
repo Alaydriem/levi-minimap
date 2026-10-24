@@ -2,23 +2,17 @@ use minimap_store::structs::WorldIdentity;
 
 use crate::errors::RuntimeError;
 use crate::services::{CaptureReader, Runtime};
-use crate::structs::{CaptureEvent, FrameOutput, ScanPlan};
+use crate::structs::{CaptureEvent, ScanPlan};
 
 // drives a runtime with recorded events, the way the shim called it; worlds are entered at `identity`
 pub struct CaptureReplay {
     identity: WorldIdentity,
     plan: ScanPlan,
-    frame: FrameOutput,
 }
 
 impl CaptureReplay {
     pub fn new(identity: WorldIdentity) -> Self {
-        Self { identity, plan: ScanPlan::default(), frame: FrameOutput::new() }
-    }
-
-    // the output of the last replayed frame
-    pub fn frame(&self) -> &FrameOutput {
-        &self.frame
+        Self { identity, plan: ScanPlan::default() }
     }
 
     pub fn apply(&mut self, runtime: &Runtime, event: &CaptureEvent) -> Result<(), RuntimeError> {
@@ -32,13 +26,10 @@ impl CaptureReplay {
             CaptureEvent::Block { x, z, dim } => {
                 runtime.block_changed(*x, *z, *dim);
             }
-            CaptureEvent::Key(key) => {
-                runtime.key(*key);
+            CaptureEvent::Keybind(input) => {
+                runtime.keybind(*input);
             }
-            CaptureEvent::Mouse(mouse) => {
-                runtime.mouse(*mouse);
-            }
-            CaptureEvent::Frame(input) => runtime.frame(input, &mut self.frame),
+            CaptureEvent::Retired(_) => {}
         }
         Ok(())
     }

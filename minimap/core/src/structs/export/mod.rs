@@ -1,4 +1,8 @@
-// what an export writes: the screen as shown, or every explored region at a fixed scale
+pub mod view_regions;
+
+pub use view_regions::ViewRegions;
+
+// what an export writes: the regions on screen, or every explored region
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportKind {
     View,

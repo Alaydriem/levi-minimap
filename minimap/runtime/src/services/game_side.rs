@@ -1,23 +1,24 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use minimap_core::config::{Config, ConfigLoader, WriteBack};
+use minimap_core::config::{Config, ConfigMerge};
 use minimap_core::errors::WaypointError;
 use minimap_core::services::cave::LayerSelector;
 use minimap_core::services::input::InputController;
 use minimap_core::structs::chunk::{ChunkProbe, ColumnSample};
-use minimap_core::structs::input::{KeyInput, KeyResult, MouseAction, MouseInput};
+use minimap_core::structs::input::{KeyResult, KeybindInput};
 use minimap_core::structs::pos::ChunkPos;
+use minimap_core::structs::settings::{SettingValue, SettingWrite};
 use minimap_store::services::{CachePaths, StoreService};
 use minimap_store::structs::{StoreCommand, StoreEvent, StoreSettings, WorldIdentity};
 
 use crate::errors::RuntimeError;
 use crate::services::{ExportService, WaypointSync, WorldSession};
 use crate::structs::{
-    CursorAction, ProbeRequest, RuntimePaths, RuntimeStats, ScanPlan, Shared, SubmitStatus, TickInput,
+    CursorAction, PendingSettings, ProbeRequest, RuntimePaths, RuntimeStats, ScanPlan, Shared, SubmitStatus, TickInput,
 };
 
-// everything the game thread calls: world lifecycle, ticks, probes, keys, config saves
+// everything the game thread calls: world lifecycle, ticks, probes, keys
 pub struct GameSide {
     shared: Arc<Shared>,
     config: Config,
@@ -25,15 +26,17 @@ pub struct GameSide {
     input: InputController,
     session: Option<WorldSession>,
     config_store: StoreService,
-    config_changed_at: Option<Instant>,
     waypoints: WaypointSync,
     store_events: Vec<StoreEvent>,
     exports: Arc<ExportService>,
     layers: LayerSelector,
+    // in-play changes waiting to be saved as manager settings
+    pending: PendingSettings,
+    // the manager's latest config; its world settings apply when the next world starts
+    next_world: Option<Config>,
 }
 
 impl GameSide {
-    pub const SAVE_DELAY: Duration = Duration::from_secs(2);
     const SHUTDOWN: Duration = Duration::from_secs(5);
     const MAX_STORE_EVENTS: usize = 16;
 
@@ -41,7 +44,6 @@ impl GameSide {
         shared: Arc<Shared>,
         config: Config,
         paths: RuntimePaths,
-        write_back: WriteBack,
         exports: Arc<ExportService>,
     ) -> Result<Self, RuntimeError> {
         let config_store = StoreService::start(None, StoreSettings::new(&config.store))?;
@@ -51,18 +53,14 @@ impl GameSide {
             store_events: Vec::with_capacity(Self::MAX_STORE_EVENTS),
             exports,
             layers: LayerSelector::new(&config),
+            pending: PendingSettings::new(),
+            next_world: None,
             shared,
             config,
             paths,
             session: None,
             config_store,
-            config_changed_at: None,
         };
-        match write_back {
-            WriteBack::None => {}
-            WriteBack::Create => game.save_config(false)?,
-            WriteBack::ReplaceInvalid => game.save_config(true)?,
-        }
         Ok(game)
     }
 
@@ -74,8 +72,26 @@ impl GameSide {
         self.waypoints.is_loaded()
     }
 
+    // takes the live part of a changed config at once and keeps the rest for the next world; returns the
+    // config now in use
+    pub fn apply_settings(&mut self, config: Config) -> Config {
+        self.config = ConfigMerge::live(&self.config, &config);
+        self.input = InputController::new(&self.config);
+        self.next_world = Some(config);
+        self.config.clone()
+    }
+
+    pub fn take_setting_writes(&mut self, out: &mut Vec<SettingWrite>) {
+        self.pending.drain(out);
+    }
+
     pub fn enter_world(&mut self, identity: &WorldIdentity, dim: i32) -> Result<(), RuntimeError> {
         self.leave_world();
+        if let Some(next) = self.next_world.take() {
+            self.config = ConfigMerge::world(&self.config, &next);
+            self.input = InputController::new(&self.config);
+            self.layers = LayerSelector::new(&self.config);
+        }
         if self.config.waypoints.enabled {
             self.waypoints.open(CachePaths::waypoints_file(identity, &self.paths.data_dir), &self.config_store);
         }
@@ -115,10 +131,13 @@ impl GameSide {
             (view.show_chunk_grid, view.show_slime_chunks)
         };
         let world_map = &mut self.config.world_map;
-        if world_map.show_chunk_grid != grid || world_map.show_slime_chunks != slime {
+        if world_map.show_chunk_grid != grid {
             world_map.show_chunk_grid = grid;
+            self.pending.set(PendingSettings::CHUNK_GRID, SettingValue::Bool(grid));
+        }
+        if world_map.show_slime_chunks != slime {
             world_map.show_slime_chunks = slime;
-            self.config_changed_at = Some(Instant::now());
+            self.pending.set(PendingSettings::SLIME_CHUNKS, SettingValue::Bool(slime));
         }
     }
 
@@ -127,12 +146,6 @@ impl GameSide {
         plan.candidates.clear();
         plan.cursor = self.cursor_action(input);
         self.sync_view_config();
-        if self.config_changed_at.is_some_and(|at| at.elapsed() >= Self::SAVE_DELAY) {
-            self.config_changed_at = None;
-            if let Err(error) = self.save_config(false) {
-                log::warn!("config not saved: {error}");
-            }
-        }
         self.drain_store_events();
         self.waypoints.tick(input, &self.config_store);
         let Some(session) = self.session.as_mut() else { return };
@@ -146,6 +159,9 @@ impl GameSide {
         }
         if self.shared.area_export.swap(false, std::sync::atomic::Ordering::SeqCst) {
             session.request_area_export();
+        }
+        if let Some(view) = Shared::lock(&self.shared.view_export).take() {
+            session.request_view_export(view);
         }
         if self.config.terrain.enable {
             let (bx, _, bz) = input.player.block();
@@ -175,25 +191,30 @@ impl GameSide {
         }
     }
 
-    pub fn key(&mut self, input: KeyInput) -> KeyResult {
-        let map_open = Shared::lock(&self.shared.view).world_map_open;
-        if (map_open || input.mouse_grabbed) && self.ui_key(input) {
-            return KeyResult { consume: true, ..KeyResult::default() };
+    pub fn keybind(&mut self, input: KeybindInput) -> KeyResult {
+        // a world map text field has the keyboard: the key is a typed letter, not a keybind
+        if self.shared.typing.load(std::sync::atomic::Ordering::Relaxed)
+            && Shared::lock(&self.shared.view).world_map_open
+        {
+            return KeyResult::default();
         }
-        let (result, radius, coordinates) = {
+        let (result, radius, coordinates, closed) = {
             let mut view = Shared::lock(&self.shared.view);
-            (self.input.on_key(&mut view, input), view.minimap_radius, view.show_coordinates)
+            let was_open = view.world_map_open;
+            let result = self.input.on_keybind(&mut view, input);
+            (result, view.minimap_radius, view.show_coordinates, was_open && !view.world_map_open)
         };
         if result.coordinates_changed {
             self.config.mini_map.show_coordinates = coordinates;
             self.config.world_map.show_coordinates = coordinates;
-            self.config_changed_at = Some(Instant::now());
+            self.pending.set(PendingSettings::MINI_MAP_COORDINATES, SettingValue::Bool(coordinates));
+            self.pending.set(PendingSettings::WORLD_MAP_COORDINATES, SettingValue::Bool(coordinates));
             let state = if coordinates { "shown" } else { "hidden" };
             Shared::lock(&self.shared.ui).show_done(format!("Coordinates {state}"));
         }
         if result.radius_changed {
             self.config.mini_map.radius_chunks = radius;
-            self.config_changed_at = Some(Instant::now());
+            self.pending.set(PendingSettings::RADIUS, SettingValue::Int(i64::from(radius)));
         }
         if result.add_waypoint
             && let Err(WaypointError::Full(cap)) = self.waypoints.add_at_player()
@@ -204,25 +225,10 @@ impl GameSide {
             let state = if self.layers.toggle() { "on" } else { "off" };
             Shared::lock(&self.shared.ui).show_done(format!("Cave view {state}"));
         }
-        if result.action == MouseAction::GrabMouse {
+        if closed {
             Shared::lock(&self.shared.ui).close();
         }
         result
-    }
-
-    // the menu, the dialog and the undo see keys before the maps do
-    fn ui_key(&self, input: KeyInput) -> bool {
-        let mut ui = Shared::lock(&self.shared.ui);
-        let mut store = Shared::lock(&self.shared.waypoints);
-        ui.key(input, &mut store)
-    }
-
-    pub fn mouse(&mut self, input: MouseInput) -> bool {
-        if Shared::lock(&self.shared.ui).wheel(input) {
-            return true;
-        }
-        let mut view = Shared::lock(&self.shared.view);
-        self.input.on_mouse(&mut view, input)
     }
 
     pub fn stats(&self) -> RuntimeStats {
@@ -231,28 +237,26 @@ impl GameSide {
 
     pub fn shutdown(&mut self) {
         self.leave_world();
-        if self.config_changed_at.take().is_some()
-            && let Err(error) = self.save_config(false)
-        {
-            log::warn!("config not saved: {error}");
-        }
         self.config_store.shutdown(Self::SHUTDOWN);
     }
 
-    // answers from the game side's store: waypoint files; config, telemetry and waypoint write failures
+    // answers from the game side's store: waypoint files; telemetry and waypoint write failures
     fn drain_store_events(&mut self) {
         self.config_store.drain_events(&mut self.store_events, Self::MAX_STORE_EVENTS);
         for event in self.store_events.drain(..) {
             match event {
                 StoreEvent::WaypointsLoaded { path, waypoints } => self.waypoints.on_loaded(&path, waypoints),
-                StoreEvent::Failed(message) => log::warn!("store: {message}"),
+                StoreEvent::Failed(message) => curia::warn!("store command failed", { error: message }),
                 _ => {}
             }
         }
     }
 
-    // while the game holds the mouse, the cursor is kept at the client centre
+    // while the game holds the mouse, the cursor is kept at the client centre; out of a world it is free
     fn cursor_action(&self, input: &TickInput) -> CursorAction {
+        if !input.player.present {
+            return CursorAction::Release;
+        }
         let map_open = Shared::lock(&self.shared.view).world_map_open;
         match (map_open, input.foreground, input.cursor_hidden) {
             (true, _, _) | (false, false, _) => CursorAction::None,
@@ -265,16 +269,7 @@ impl GameSide {
     pub fn append_line(&self, path: &std::path::Path, line: String, truncate: bool) {
         let command = StoreCommand::AppendLine { path: path.to_path_buf(), line, truncate };
         if self.config_store.try_send(command).is_err() {
-            log::warn!("telemetry line dropped: the store queue is full");
+            curia::warn!("telemetry line dropped: the store queue is full");
         }
-    }
-
-    fn save_config(&self, keep_invalid_copy: bool) -> Result<(), RuntimeError> {
-        let json = ConfigLoader::to_json(&self.config)?;
-        let command = StoreCommand::WriteConfig { path: self.paths.config_file.clone(), json, keep_invalid_copy };
-        if self.config_store.try_send(command).is_err() {
-            log::warn!("config save skipped: the store queue is full");
-        }
-        Ok(())
     }
 }

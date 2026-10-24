@@ -26,7 +26,7 @@ fn session(dir: &std::path::Path) -> (Arc<Shared>, WorldSession) {
         BakeSettings::new(&config.terrain),
         ViewState::new(4),
         WaypointStore::new(8, 1),
-        MapUi::new(1.0, 64),
+        MapUi::new(1.0),
     ));
     let exports = Arc::new(ExportService::start(dir, Arc::clone(&shared)).unwrap());
     let mut session = WorldSession::start(Arc::clone(&shared), &config, None, 0, exports).unwrap();

@@ -1,18 +1,21 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
+use amm_client::link::ManagerLink;
+use minimap_link::services::{MinimapSession, SystemClipboard};
 use minimap_runtime::services::Runtime;
 
-use crate::services::{GameBuffers, RenderBuffers};
+use crate::services::GameBuffers;
 
-// the opaque handle C++ holds; game-thread and render-thread buffers have separate locks
+// the opaque handle C++ holds: the manager session the tick runs, and the runtime the game calls reach
 pub struct LmHandle {
-    pub runtime: Runtime,
+    pub session: Mutex<Option<MinimapSession<ManagerLink, SystemClipboard>>>,
+    pub runtime: Arc<Runtime>,
     pub game: Mutex<GameBuffers>,
-    pub render: Mutex<RenderBuffers>,
 }
 
 impl LmHandle {
-    pub fn new(runtime: Runtime) -> Self {
-        Self { runtime, game: Mutex::new(GameBuffers::new()), render: Mutex::new(RenderBuffers::new()) }
+    pub fn new(session: MinimapSession<ManagerLink, SystemClipboard>) -> Self {
+        let runtime = Arc::clone(session.runtime());
+        Self { session: Mutex::new(Some(session)), runtime, game: Mutex::new(GameBuffers::new()) }
     }
 }

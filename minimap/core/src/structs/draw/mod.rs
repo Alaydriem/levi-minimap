@@ -1,19 +1,23 @@
 pub mod command;
 pub mod explored_chunks;
 pub mod list;
+pub mod map_layer;
 pub mod minimap_frame;
 pub mod residency_decision;
 pub mod sampler;
 pub mod text_align;
+pub mod texture_grant;
 pub mod texture_op;
 pub mod world_map_frame;
 
 pub use command::DrawCommand;
 pub use explored_chunks::ExploredChunks;
 pub use list::DrawList;
+pub use map_layer::MapLayer;
 pub use minimap_frame::MinimapFrame;
 pub use residency_decision::ResidencyDecision;
 pub use sampler::SamplerKind;
 pub use text_align::TextAlign;
+pub use texture_grant::TextureGrant;
 pub use texture_op::TextureOp;
 pub use world_map_frame::WorldMapFrame;

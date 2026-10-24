@@ -75,9 +75,9 @@ impl RegionFiles {
             self.set_aside(path, &error.to_string());
             return;
         }
-        log::info!("region file {} has an older cache format; it is rebuilt as the world is explored", path.display());
+        curia::info!("a region file has an older cache format; it is rebuilt as the world is explored", { path: path.display().to_string() });
         if let Err(error) = fs::remove_file(path) {
-            log::warn!("could not remove {}: {error}", path.display());
+            curia::warn!("could not remove an old region file", { path: path.display().to_string(), error: error.to_string() });
         }
     }
 
@@ -126,9 +126,9 @@ impl RegionFiles {
     }
 
     fn set_aside(&self, path: &std::path::Path, reason: &str) {
-        log::warn!("region file {} is unreadable ({reason}); it is renamed to .corrupt", path.display());
+        curia::warn!("a region file is unreadable; it is renamed to .corrupt", { path: path.display().to_string(), reason: reason.to_string() });
         if let Err(error) = fs::rename(path, path.with_extension("lmr.corrupt")) {
-            log::warn!("could not rename {}: {error}", path.display());
+            curia::warn!("could not rename a corrupt file", { path: path.display().to_string(), error: error.to_string() });
         }
     }
 }

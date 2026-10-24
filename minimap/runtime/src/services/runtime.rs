@@ -1,28 +1,30 @@
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use minimap_core::config::{Config, ConfigLoader};
+use minimap_core::config::Config;
 use minimap_core::services::biome::{BiomeColors, HoverBiomeCache};
-use minimap_core::services::export::ViewImage;
+use minimap_core::services::input::InputController;
 use minimap_core::services::memory::{ChunkStore, KnownEmptySet, TileStore};
 use minimap_core::services::ui::MapUi;
 use minimap_core::services::waypoints::WaypointStore;
 use minimap_core::structs::Rgba;
 use minimap_core::structs::bake::BakeSettings;
 use minimap_core::structs::chunk::{ChunkProbe, ColumnSample};
-use minimap_core::structs::input::{KeyInput, KeyResult, MouseInput};
+use minimap_core::structs::draw::{MapLayer, TextureGrant};
+use minimap_core::structs::input::{KeyResult, KeybindInput};
 use minimap_core::structs::pos::ChunkPos;
-use minimap_core::structs::view::ViewState;
+use minimap_core::structs::settings::SettingWrite;
+use minimap_core::structs::view::{ViewFlags, ViewState};
 use minimap_core::structs::waypoint::Waypoint;
-use minimap_store::services::ConfigFile;
 use minimap_store::structs::WorldIdentity;
 
 use crate::errors::RuntimeError;
 use crate::services::{CaptureSink, CaptureWriter, ExportService, GameSide, RenderSide, TelemetryRecorder};
 use crate::structs::{
-    CaptureEvent, CaptureHeader, FrameInput, FrameOutput, ProbeRequest, RuntimePaths, RuntimeStats, ScanPlan, Shared,
-    SubmitStatus, TelemetryRow, TickInput,
+    CaptureEvent, CaptureHeader, CursorAction, LayerInput, LayerPaint, LayerReply, ProbeRequest, RuntimePaths,
+    RuntimeStats, ScanPlan, Shared, SubmitStatus, TelemetryRow, TickInput,
 };
 
 // the whole mod behind one handle; game-thread calls and render-thread calls take separate locks
@@ -38,6 +40,10 @@ pub struct Runtime {
     sink: Option<CaptureSink>,
     telemetry: Option<Mutex<TelemetryRecorder>>,
     telemetry_path: PathBuf,
+    // false while the manager has the mod disabled: no scan, no drawing
+    active: AtomicBool,
+    // the mod was disabled and the cursor clip is not yet given back
+    release_cursor: AtomicBool,
 }
 
 impl Runtime {
@@ -46,16 +52,8 @@ impl Runtime {
     pub const TELEMETRY_FILE: &'static str = "telemetry.csv";
     pub const CAPTURE_DIR: &'static str = "captures";
 
-    pub fn new(paths: RuntimePaths) -> Result<Self, RuntimeError> {
-        let text = ConfigFile::read(&paths.config_file).unwrap_or_else(|error| {
-            log::warn!("config.json not read: {error}");
-            None
-        });
-        let loaded = ConfigLoader::load(text.as_deref());
-        for warning in &loaded.warnings {
-            log::warn!("config {}: {}", warning.key, warning.message);
-        }
-        let config = loaded.config.clone();
+    // `grant` is the texture budget the mod manager gave this mod; it caps the GPU tiles
+    pub fn new(config: Config, paths: RuntimePaths, grant: TextureGrant) -> Result<Self, RuntimeError> {
         let biomes = BiomeColors::from_overrides(&config.terrain.biome_color_overrides);
         let settings = BakeSettings::new(&config.terrain);
         let memory = &config.memory;
@@ -74,7 +72,7 @@ impl Runtime {
                 ..ViewState::new(config.mini_map.radius_chunks)
             },
             WaypointStore::new(config.waypoints.max_per_world.max(1) as usize, Self::seed()),
-            MapUi::new(config.mini_map.widget_scale, config.world_map.ui_event_capacity.max(1) as usize),
+            MapUi::new(config.mini_map.widget_scale),
         ));
         *Shared::lock(&shared.hover_biomes) =
             HoverBiomeCache::new(config.world_map.hover_biome_regions.max(1) as usize);
@@ -93,8 +91,8 @@ impl Runtime {
         let home = std::env::var_os("USERPROFILE").map(PathBuf::from);
         let export_dir = ExportService::folder(&config.export.folder, home.as_deref(), &paths.data_dir);
         let exports = Arc::new(ExportService::start(&export_dir, Arc::clone(&shared))?);
-        let render = RenderSide::new(Arc::clone(&shared), &config, Arc::clone(&exports));
-        let game = GameSide::new(Arc::clone(&shared), config, paths, loaded.write_back, Arc::clone(&exports))?;
+        let render = RenderSide::new(Arc::clone(&shared), &config, Arc::clone(&exports), grant);
+        let game = GameSide::new(Arc::clone(&shared), config, paths, Arc::clone(&exports))?;
         if telemetry.is_some() {
             game.append_line(&telemetry_path, TelemetryRow::HEADER.to_string(), true);
         }
@@ -109,12 +107,36 @@ impl Runtime {
             capture: Mutex::new(capture),
             telemetry,
             telemetry_path,
+            active: AtomicBool::new(true),
+            release_cursor: AtomicBool::new(false),
         })
     }
 
     pub fn enter_world(&self, identity: &WorldIdentity, dim: i32) -> Result<(), RuntimeError> {
         self.record(|| CaptureEvent::Enter { dim });
-        Shared::lock(&self.game).enter_world(identity, dim)
+        let config = {
+            let mut game = Shared::lock(&self.game);
+            game.enter_world(identity, dim)?;
+            game.config().clone()
+        };
+        Shared::lock(&self.render).apply_world(&config);
+        Ok(())
+    }
+
+    // a config the manager changed: live settings now, world settings at the next world, the rest at restart
+    pub fn apply_settings(&self, config: Config) {
+        let live = Shared::lock(&self.game).apply_settings(config);
+        Shared::lock(&self.render).apply_live(&live);
+        let mut view = Shared::lock(&self.shared.view);
+        view.minimap_radius = live.mini_map.radius_chunks;
+        view.show_coordinates = live.mini_map.show_coordinates || live.world_map.show_coordinates;
+        view.show_chunk_grid = live.world_map.show_chunk_grid;
+        view.show_slime_chunks = live.world_map.show_slime_chunks;
+    }
+
+    // the in-play changes to save as manager settings since the last call
+    pub fn take_setting_writes(&self, out: &mut Vec<SettingWrite>) {
+        Shared::lock(&self.game).take_setting_writes(out);
     }
 
     pub fn leave_world(&self) {
@@ -132,6 +154,18 @@ impl Runtime {
             let stats = self.stats();
             let row = Shared::lock(telemetry).take_row(started, &stats, self.shared.bake_timing.totals());
             Shared::lock(&self.game).append_line(&self.telemetry_path, row.to_csv(), false);
+        }
+        if !self.active.load(Ordering::SeqCst) {
+            plan.candidates.clear();
+            plan.cursor = if self.release_cursor.swap(false, Ordering::SeqCst) {
+                CursorAction::Release
+            } else {
+                CursorAction::None
+            };
+            return;
+        }
+        if let Some(telemetry) = &self.telemetry {
+            Shared::lock(telemetry).on_memory(input.working_set_bytes, input.private_bytes);
         }
         Shared::lock(&self.game).tick(input, plan);
         if let Some(telemetry) = &self.telemetry {
@@ -182,39 +216,65 @@ impl Runtime {
         &self.block_colors
     }
 
-    pub fn key(&self, input: KeyInput) -> KeyResult {
-        self.record(|| CaptureEvent::Key(input));
-        Shared::lock(&self.game).key(input)
+    pub fn view_flags(&self) -> ViewFlags {
+        let view = Shared::lock(&self.shared.view);
+        ViewFlags { world_map_open: view.world_map_open, show_minimap: view.show_minimap }
     }
 
-    pub fn mouse(&self, input: MouseInput) -> bool {
-        self.record(|| CaptureEvent::Mouse(input));
-        Shared::lock(&self.game).mouse(input)
+    // the manager took the world map's lease away, or refused it
+    pub fn close_world_map(&self) {
+        InputController::close_world_map(&mut Shared::lock(&self.shared.view));
+        Shared::lock(&self.shared.ui).close();
     }
 
-    // one UTF-16 unit typed while a dialog has the keyboard
-    pub fn text(&self, unit: u32) {
-        Shared::lock(&self.shared.ui).text(unit);
+    pub fn set_active(&self, active: bool) {
+        self.release_cursor.store(!active, Ordering::SeqCst);
+        self.active.store(active, Ordering::SeqCst);
     }
 
-    // the back buffer of a CAPTURE_VIEW frame, as the shim mapped it; format is its DXGI format
-    pub fn view_captured(&self, pixels: &[u8], size: (u32, u32), stride: u32, format: u32) {
-        let (width, height) = size;
-        let dim = self.shared.layer.load(std::sync::atomic::Ordering::Relaxed);
-        let exported = ViewImage::from_capture(pixels, width as usize, height as usize, stride as usize, format)
-            .map_err(|error| format!("Export failed: {error}"))
-            .and_then(|rgba| self.exports.export_view(rgba, width, height, dim));
-        if let Err(message) = exported {
-            Shared::lock(&self.shared.ui).show_message(message);
+    // one manager layer pass on the render thread; nothing is drawn while the mod is inactive
+    pub fn paint_layer(&self, ctx: &egui::Context, input: &LayerInput) -> LayerReply {
+        if !self.active.load(Ordering::SeqCst) {
+            return LayerReply::EMPTY;
         }
-    }
-
-    pub fn frame(&self, input: &FrameInput, out: &mut FrameOutput) {
-        self.record(|| CaptureEvent::Frame(*input));
-        Shared::lock(&self.render).frame(input, out);
+        let started = Instant::now();
+        let (reply, (upload_us, upload_bytes)) = {
+            let mut render = Shared::lock(&self.render);
+            let reply = render.paint_layer(ctx, input);
+            (reply, render.upload_stats())
+        };
         if let Some(telemetry) = &self.telemetry {
-            Shared::lock(telemetry).on_frame(input, out.ui_build_us);
+            let paint_us = u32::try_from(started.elapsed().as_micros()).unwrap_or(u32::MAX);
+            Shared::lock(telemetry).on_paint(paint_us, upload_us, upload_bytes);
         }
+        reply
+    }
+
+    // the manager's whole draw for this mod in one frame, as its frame handler timed it
+    pub fn record_render(&self, render_us: u32) {
+        if let Some(telemetry) = &self.telemetry {
+            Shared::lock(telemetry).on_render(render_us);
+        }
+    }
+
+    // the manager lost every texture; each layer uploads its own again
+    pub fn textures_lost(&self) {
+        Shared::lock(&self.render).textures_lost();
+    }
+
+    // text a menu choice put on the clipboard, once
+    pub fn take_clipboard(&self) -> Option<String> {
+        Shared::lock(&self.render).take_clipboard()
+    }
+
+    // what the last pass of `layer` drew and uploaded, for tests and benches
+    pub fn with_last_paint<R>(&self, layer: MapLayer, read: impl FnOnce(&LayerPaint) -> R) -> R {
+        read(Shared::lock(&self.render).last_paint(layer))
+    }
+
+    pub fn keybind(&self, input: KeybindInput) -> KeyResult {
+        self.record(|| CaptureEvent::Keybind(input));
+        Shared::lock(&self.game).keybind(input)
     }
 
     // a copy of the current world's waypoints, every dimension
@@ -239,6 +299,8 @@ impl Runtime {
         RuntimeStats {
             frames: render.frames(),
             gpu_textures: render.gpu_textures(),
+            gpu_texture_mb: render.gpu_texture_bytes() / Self::MIB,
+            gpu_texture_budget_mb: render.gpu_texture_budget_bytes() / Self::MIB,
             surfaces_resident,
             surface_capacity,
             tiles_resident,
@@ -253,7 +315,7 @@ impl Runtime {
         self.exports.shutdown();
         if let Some(writer) = Shared::lock(&self.capture).take() {
             let report = writer.finish();
-            log::info!("capture closed: {} events written, {} dropped", report.written, report.dropped);
+            curia::info!("capture closed", { written: report.written, dropped: report.dropped });
         }
     }
 
@@ -270,11 +332,11 @@ impl Runtime {
         let path = paths.data_dir.join(Self::CAPTURE_DIR).join(format!("capture-{secs}.lmcap"));
         match CaptureWriter::start(&path, &CaptureHeader::new(&config.terrain)) {
             Ok(writer) => {
-                log::info!("recording a capture to {}", path.display());
+                curia::info!("recording a capture", { path: path.display().to_string() });
                 Some(writer)
             }
             Err(error) => {
-                log::warn!("capture not started: {error}");
+                curia::warn!("capture not started", { error: error.to_string() });
                 None
             }
         }

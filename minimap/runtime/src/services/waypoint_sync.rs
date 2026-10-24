@@ -34,7 +34,7 @@ impl WaypointSync {
     // a world was entered: its file is read on the store thread
     pub fn open(&mut self, path: PathBuf, store: &StoreService) {
         if store.try_send(StoreCommand::LoadWaypoints { path: path.clone() }).is_err() {
-            log::warn!("waypoints not loaded: the store queue is full");
+            curia::warn!("waypoints not loaded: the store queue is full");
         }
         self.file = Some(path);
         self.loaded = false;
@@ -60,7 +60,7 @@ impl WaypointSync {
         let count = waypoints.len();
         let dropped = Shared::lock(&self.shared.waypoints).merge_loaded(waypoints);
         if dropped > 0 {
-            log::warn!("{dropped} of {count} waypoints in {} were dropped", path.display());
+            curia::warn!("waypoints were dropped on load", { dropped: dropped, count: count, path: path.display().to_string() });
         }
         self.loaded = true;
     }
@@ -107,7 +107,7 @@ impl WaypointSync {
     fn save(&mut self, store: &StoreService) {
         let Some(path) = self.file.clone() else { return };
         if !self.loaded {
-            log::warn!("waypoints not saved yet: {} has not been read", path.display());
+            curia::warn!("waypoints not saved yet: the file has not been read", { path: path.display().to_string() });
             self.changed_at = Some(Instant::now());
             return;
         }
@@ -115,7 +115,7 @@ impl WaypointSync {
         match store.try_send(StoreCommand::WriteWaypoints { path, waypoints }) {
             Ok(()) => self.changed_at = None,
             Err(_) => {
-                log::warn!("waypoints not saved yet: the store queue is full");
+                curia::warn!("waypoints not saved yet: the store queue is full");
                 self.changed_at = Some(Instant::now());
             }
         }

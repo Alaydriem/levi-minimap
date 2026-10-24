@@ -1,8 +1,8 @@
+use levi_ui::icon::Icon;
 use minimap_core::services::waypoints::WaypointStore;
 use minimap_core::structs::ui::{MapAction, MenuItem, MenuTarget};
-use minimap_ui::theme::Icon;
 
-use crate::support::Scene;
+use crate::support::{IconText, Scene};
 
 const GROUND: MenuTarget = MenuTarget::Ground { dim: 0, x: 316, y: 71, z: -58 };
 
@@ -39,14 +39,14 @@ fn a_row_click_returns_choose_for_its_item() {
 fn the_waypoint_switch_names_what_it_will_do() {
     let mut scene = Scene::new(false);
     open_menu(&mut scene, GROUND);
-    let shown = scene.mesh.draws_text("Hide waypoints") && scene.mesh.draws_text(&Icon::HIDE.to_string());
+    let shown = scene.mesh.draws_text("Hide waypoints") && scene.mesh.draws_text(&IconText::of(Icon::Hide));
 
     let mut store = WaypointStore::new(8, 1);
     scene.ui.apply(MapAction::Choose(MenuItem::ToggleWaypoints), "", 0, &mut scene.view, &mut store, 0);
     open_menu(&mut scene, GROUND);
 
     assert!(shown);
-    assert!(scene.mesh.draws_text("Show waypoints") && scene.mesh.draws_text(&Icon::SHOW.to_string()));
+    assert!(scene.mesh.draws_text("Show waypoints") && scene.mesh.draws_text(&IconText::of(Icon::Show)));
 }
 
 #[test]

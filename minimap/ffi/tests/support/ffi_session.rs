@@ -1,12 +1,20 @@
-use minimap_ffi::api::lifecycle::{lm_create, lm_destroy, lm_enter_world};
-use minimap_ffi::services::LmHandle;
-use minimap_ffi::types::{LmPaths, LmStatus, LmStr, LmWorldInfo};
+use std::sync::Arc;
 
-// a handle created through the C ABI over a temporary folder
+use amm_client::test_support::FakeTable;
+use minimap_core::config::Config;
+use minimap_core::structs::draw::TextureGrant;
+use minimap_ffi::api::lifecycle::{lm_destroy, lm_enter_world};
+use minimap_ffi::services::LmHandle;
+use minimap_ffi::types::{LmStatus, LmStr, LmWorldInfo};
+use minimap_link::services::{MinimapSession, SystemClipboard};
+use minimap_runtime::services::Runtime;
+use minimap_runtime::structs::RuntimePaths;
+
+// a handle over a temporary folder, registered with amm-client's fake manager table
 pub struct FfiSession {
     pub dir: tempfile::TempDir,
     pub handle: *mut LmHandle,
-    strings: Vec<String>,
+    world: String,
 }
 
 impl FfiSession {
@@ -16,20 +24,16 @@ impl FfiSession {
 
     pub fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
-        let strings = vec![
-            dir.path().join("config.json").display().to_string(),
-            dir.path().join("data").display().to_string(),
-            dir.path().join("world").display().to_string(),
-        ];
-        let paths = LmPaths { config_file: Self::str(&strings[0]), data_dir: Self::str(&strings[1]) };
-        let handle = lm_create(&paths, None);
-        assert!(!handle.is_null());
-        Self { dir, handle, strings }
+        let paths = RuntimePaths { data_dir: dir.path().join("data") };
+        let runtime = Arc::new(Runtime::new(Config::default(), paths, TextureGrant::OLD_MANAGER).unwrap());
+        let session = MinimapSession::with_port(FakeTable::link_without_frame(), runtime, SystemClipboard);
+        let handle = Box::into_raw(Box::new(LmHandle::new(session)));
+        let world = dir.path().join("world").display().to_string();
+        Self { dir, handle, world }
     }
 
     pub fn enter(&self) {
-        let info =
-            LmWorldInfo { local_dir: Self::str(&self.strings[2]), host: Self::str(""), port: 0, seed: 0, dim: 0 };
+        let info = LmWorldInfo { local_dir: Self::str(&self.world), host: Self::str(""), port: 0, seed: 0, dim: 0 };
         assert_eq!(lm_enter_world(self.handle, &info), LmStatus::Ok);
     }
 }

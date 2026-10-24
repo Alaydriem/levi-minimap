@@ -13,7 +13,7 @@ target("alaydriem-minimap")
     add_rules("@levibuildscript/linkrule")
     add_rules("@levibuildscript/modpacker", {modName = "alaydriem-minimap", modVersion = "0.1.0"})
     add_packages("levilamina")
-    add_syslinks("d3d11", "d3d12", "dxgi", "d3dcompiler", "user32", "kernel32", "ntdll", "userenv", "ws2_32", "dbghelp")
+    add_syslinks("user32", "kernel32", "ntdll", "userenv", "ws2_32", "dbghelp", "gdi32", "shell32", "advapi32")
     add_defines("NOMINMAX", "UNICODE", "_AMD64_")
     set_exceptions("none")
     add_cxflags("/EHa", "/utf-8", "/W4", "/w44265", "/w44289", "/w44296", "/w45263", "/w44738", "/w45204")
@@ -40,4 +40,20 @@ target("alaydriem-minimap")
     add_defines("LL_PLAT_C")
     add_linkdirs("$(projectdir)/../target/release")
     add_links("minimap_ffi")
+    -- the manager's font, Nordwand Mono, is embedded in the DLL; its licence ships beside it
+    after_build(function (target)
+        import("core.base.json")
+        local manifest = path.join(os.projectdir(), "..", "Cargo.toml")
+        local metadata = json.decode(os.iorunv("cargo", {"metadata", "--format-version", "1", "--manifest-path", manifest}))
+        local crate
+        for _, package in ipairs(metadata.packages) do
+            if package.name == "levi-ui" then
+                crate = path.directory(package.manifest_path)
+            end
+        end
+        assert(crate, "cargo metadata names no levi-ui package")
+        local outputdir = path.join(os.projectdir(), "bin", "alaydriem-minimap")
+        os.mkdir(outputdir)
+        os.cp(path.join(crate, "assets", "fonts", "OFL.txt"), path.join(outputdir, "OFL.txt"))
+    end)
 

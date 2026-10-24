@@ -1,11 +1,9 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default, rename_all = "snake_case")]
 pub struct WaypointsConfig {
     pub enabled: bool,
-    // Win32 virtual-key code that adds a waypoint at the player
-    pub add_key: i32,
     pub max_per_world: i32,
     pub show_on_minimap: bool,
     pub max_edge_arrows: i32,
@@ -15,13 +13,6 @@ pub struct WaypointsConfig {
 
 impl Default for WaypointsConfig {
     fn default() -> Self {
-        Self {
-            enabled: true,
-            add_key: 0x4E,
-            max_per_world: 512,
-            show_on_minimap: true,
-            max_edge_arrows: 16,
-            label_scale: 1.0,
-        }
+        Self { enabled: true, max_per_world: 512, show_on_minimap: true, max_edge_arrows: 16, label_scale: 1.0 }
     }
 }

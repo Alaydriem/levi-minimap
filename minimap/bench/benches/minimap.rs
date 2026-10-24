@@ -3,6 +3,9 @@ use std::hint::black_box;
 use std::time::Duration;
 
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use egui::{Context, Event, Pos2, RawInput, Rect, pos2, vec2};
+use levi_ui::font::FontSource;
+use levi_ui::theme::Theme;
 use minimap_bench::services::{BenchInputs, BenchTerrain, OverlayScenes};
 use minimap_bench::structs::BenchInput;
 use minimap_core::config::{Config, MiniMapConfig, TerrainConfig};
@@ -19,17 +22,16 @@ use minimap_core::services::ui::MapUi;
 use minimap_core::services::waypoints::WaypointStore;
 use minimap_core::structs::bake::{BakeOutput, BakeSettings, RegionBakeOutput};
 use minimap_core::structs::chunk::ColumnSample;
-use minimap_core::structs::draw::{DrawList, ExploredChunks, MinimapFrame, WorldMapFrame};
-use minimap_core::structs::mesh::UiMesh;
+use minimap_core::structs::draw::{DrawList, ExploredChunks, MapLayer, MinimapFrame, TextureOp, WorldMapFrame};
 use minimap_core::structs::pos::{ChunkPos, RegionPos};
-use minimap_core::structs::ui::{HintKeys, HoverInfo, MapAction, MenuTarget, UiFrame, UiFrameInput};
+use minimap_core::structs::ui::{HintKeys, HoverInfo, MapAction, MenuTarget, UiFrame};
 use minimap_core::structs::view::CameraPose;
 use minimap_core::structs::view::ViewState;
 use minimap_core::structs::waypoint::WaypointSource;
 use minimap_store::services::{Journal, RegionFiles};
 use minimap_store::structs::JournalRecord;
-use minimap_ui::runtime::UiRuntime;
-use minimap_ui::theme::FontSource;
+use minimap_ui::map::LayerTextures;
+use minimap_ui::runtime::LayerPainter;
 
 struct MinimapBenches;
 
@@ -300,26 +302,49 @@ impl MinimapBenches {
         group.finish();
     }
 
-    // a 1920 x 1080 minimap frame through egui, with no events; the cursor is off the minimap
-    fn ui_input() -> UiFrameInput<'static> {
-        UiFrameInput {
-            display: (1920.0, 1080.0),
-            pixels_per_point: 1.0,
-            time_s: 0.0,
-            cursor: (960.0, 900.0),
-            left_down: false,
-            right_down: false,
-            foreground: true,
-            events: &[],
-            draw_cursor: false,
-            collect_text: false,
+    // a 1920 x 1080 pass with the cursor off the minimap, as the manager builds a layer's input
+    fn layer_input() -> RawInput {
+        RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1920.0, 1080.0))),
+            events: vec![Event::PointerMoved(pos2(960.0, 900.0))],
+            ..RawInput::default()
         }
     }
 
-    // the map draw list painted, turned into egui shapes, tessellated and flattened, as one frame
-    // costs on the render thread; three frames run first so the font atlas is built
-    fn egui_frame(c: &mut Criterion) {
-        let mut group = c.benchmark_group("egui_frame");
+    // a levi-ui context like the manager's, with a 1x1 texture for each map texture id, so every image
+    // the painters draw is tessellated as in the game
+    fn layer_context(textures: &mut LayerTextures, ids: std::ops::Range<u32>) -> Context {
+        let ctx = Context::default();
+        Theme::install(&ctx, FontSource::Embedded);
+        let buffers = vec![vec![255u8; 4]];
+        let ops: Vec<TextureOp> = ids.map(|tex| TextureOp::Upload { tex, width: 1, height: 1, buffer: 0 }).collect();
+        let mut output = ctx.run_pass(Self::layer_input(), |ctx| {
+            textures.ensure_context(ctx);
+            textures.apply(ctx, &ops, &buffers);
+        });
+        output.textures_delta.clear();
+        ctx
+    }
+
+    // one layer pass and its tessellation, as the manager runs it on the render thread
+    fn pass(
+        ctx: &Context,
+        painter: &mut LayerPainter,
+        textures: &LayerTextures,
+        draw: &DrawList,
+        frame: Option<&UiFrame<'_>>,
+    ) -> usize {
+        let mut output = ctx.run_pass(Self::layer_input(), |ctx| {
+            black_box(painter.paint(ctx, MapLayer::Overlay, draw, textures, frame).len());
+        });
+        output.textures_delta.clear();
+        ctx.tessellate(output.shapes, output.pixels_per_point).len()
+    }
+
+    // the map draw list painted into a manager layer: egui shapes, layout and tessellation, without the mesh
+    // flattening the manager does; three passes run first so the font atlas is built
+    fn layer_paint(c: &mut Criterion) {
+        let mut group = c.benchmark_group("layer_paint");
         let painter = MinimapPainter::new(&MiniMapConfig::default());
         let camera = CameraPose { x: 8.5, z: 8.5, yaw: 30.0 };
         let minimap = MinimapFrame {
@@ -336,15 +361,15 @@ impl MinimapBenches {
             angle: 0.0,
         };
         let turned = MinimapFrame { angle: 0.7, ..minimap };
-        let input = Self::ui_input();
-        let mut runtime = UiRuntime::new(FontSource::System);
-        let mut mesh = UiMesh::new();
+        let mut textures = LayerTextures::new(1024);
+        let ctx = Self::layer_context(&mut textures, 1..803);
+        let mut layer = LayerPainter::new();
         let mut draw = DrawList::new();
         for frame in [&minimap, &turned] {
             draw.clear();
             painter.paint(frame, &mut draw);
             for _ in 0..3 {
-                runtime.run_with(&input, &draw, |_| {}, &mut mesh);
+                Self::pass(&ctx, &mut layer, &textures, &draw, None);
             }
         }
         for (name, frame) in [("minimap", &minimap), ("minimap_turned", &turned)] {
@@ -352,8 +377,7 @@ impl MinimapBenches {
                 b.iter(|| {
                     draw.clear();
                     painter.paint(frame, &mut draw);
-                    runtime.run_with(&input, &draw, |_| {}, &mut mesh);
-                    black_box(mesh.vertices.len());
+                    black_box(Self::pass(&ctx, &mut layer, &textures, &draw, None));
                 });
             });
         }
@@ -369,8 +393,7 @@ impl MinimapBenches {
                 draw.clear();
                 painter.paint(&minimap, &mut draw);
                 waypoints.paint_minimap(&minimap, disc, store.waypoints(), &mut draw);
-                runtime.run_with(&input, &draw, |_| {}, &mut mesh);
-                black_box(mesh.vertices.len());
+                black_box(Self::pass(&ctx, &mut layer, &textures, &draw, None));
             });
         });
         let regions: Vec<(RegionPos, Option<u32>)> =
@@ -392,21 +415,21 @@ impl MinimapBenches {
             b.iter(|| {
                 draw.clear();
                 WorldMapPainter::paint(&world, &mut draw);
-                runtime.run_with(&input, &draw, |_| {}, &mut mesh);
-                black_box(mesh.vertices.len());
+                black_box(Self::pass(&ctx, &mut layer, &textures, &draw, None));
             });
         });
-        Self::egui_panels(&mut group, &mut runtime, &world, &mut mesh);
+        Self::layer_panels(&mut group, &ctx, &textures, &world);
         draw.clear();
         painter.paint(&minimap, &mut draw);
         group.sample_size(10);
         group.bench_function("first_frame", |b| {
             b.iter_batched(
-                || UiRuntime::new(FontSource::System),
-                |mut fresh| {
-                    fresh.run_with(&input, &draw, |_| {}, &mut mesh);
-                    black_box(mesh.pixels.len());
+                || {
+                    let ctx = Context::default();
+                    Theme::install(&ctx, FontSource::Embedded);
+                    ctx
                 },
+                |fresh| black_box(Self::pass(&fresh, &mut LayerPainter::new(), &LayerTextures::new(1), &draw, None)),
                 BatchSize::LargeInput,
             );
         });
@@ -414,26 +437,26 @@ impl MinimapBenches {
     }
 
     // the world map with the tools card and the list of 512 waypoints open
-    fn egui_panels(
+    fn layer_panels(
         group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
-        runtime: &mut UiRuntime,
+        ctx: &Context,
+        textures: &LayerTextures,
         world: &WorldMapFrame<'_>,
-        mesh: &mut UiMesh,
     ) {
         let waypoints = OverlayScenes::waypoints();
         let rows = OverlayScenes::rows(&waypoints, "");
         let mut store = WaypointStore::new(8, 1);
         let mut view = ViewState::new(5);
-        let mut ui = MapUi::new(1.0, 64);
+        let mut ui = MapUi::new(1.0);
         ui.apply(MapAction::ToggleList, "", 0, &mut view, &mut store, 0);
         // the same panels with the right-click menu open as well, as draw_list/world_map_panels has
-        let mut panels = MapUi::new(1.0, 64);
+        let mut panels = MapUi::new(1.0);
         panels.apply(MapAction::ToggleList, "", 0, &mut view, &mut store, 0);
         panels.open_menu((960.0, 540.0), MenuTarget::Ground { dim: 0, x: 0, y: 64, z: 0 });
-        let input = Self::ui_input();
+        let mut layer = LayerPainter::new();
         let mut draw = DrawList::new();
         let mut markers = WaypointPainter::new(&Config::default());
-        let mut run = |runtime: &mut UiRuntime, draw: &mut DrawList, ui: &MapUi, with_markers: bool| {
+        let mut run = |layer: &mut LayerPainter, draw: &mut DrawList, ui: &MapUi, with_markers: bool| {
             draw.clear();
             WorldMapPainter::paint(world, draw);
             if with_markers {
@@ -449,18 +472,18 @@ impl MinimapBenches {
                 player_block: (0, 70, 0),
                 dim: 0,
                 hover: Some(HoverInfo { block: (-1, 0), chunk: (-1, 0), biome: Some("Plains") }),
-                keys: HintKeys { toggle: 0x4D },
+                keys: HintKeys { toggle: "M" },
             };
-            black_box(runtime.run(&input, draw, Some(&frame), mesh).len());
+            black_box(Self::pass(ctx, layer, textures, draw, Some(&frame)));
         };
         for _ in 0..3 {
-            run(runtime, &mut draw, &ui, false);
+            run(&mut layer, &mut draw, &ui, false);
         }
-        group.bench_function("waypoint_list_512", |b| b.iter(|| run(runtime, &mut draw, &ui, false)));
+        group.bench_function("waypoint_list_512", |b| b.iter(|| run(&mut layer, &mut draw, &ui, false)));
         for _ in 0..3 {
-            run(runtime, &mut draw, &panels, true);
+            run(&mut layer, &mut draw, &panels, true);
         }
-        group.bench_function("world_map_panels", |b| b.iter(|| run(runtime, &mut draw, &panels, true)));
+        group.bench_function("world_map_panels", |b| b.iter(|| run(&mut layer, &mut draw, &panels, true)));
     }
 
     // the game-thread work cave mode adds: preparing each probed chunk, and picking the layer each tick
@@ -579,6 +602,6 @@ criterion_group! {
     config = Criterion::default().sample_size(20).measurement_time(Duration::from_secs(2)).warm_up_time(Duration::from_millis(500));
     targets = MinimapBenches::probe_submit, MinimapBenches::chunk_bake, MinimapBenches::region_bake,
         MinimapBenches::minimap_compose, MinimapBenches::draw_list, MinimapBenches::export, MinimapBenches::cave, MinimapBenches::store,
-        MinimapBenches::world_map_tools, MinimapBenches::egui_frame
+        MinimapBenches::world_map_tools, MinimapBenches::layer_paint
 }
 criterion_main!(benches);

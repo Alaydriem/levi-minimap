@@ -1,36 +1,29 @@
 use std::path::PathBuf;
 
-use minimap_runtime::services::Runtime;
-use minimap_runtime::structs::RuntimePaths;
 use minimap_store::structs::WorldIdentity;
 
-use crate::services::{LmBoundary, LmConvert, LmHandle, LogBridge};
-use crate::types::{LmLogFn, LmPaths, LmStats, LmStatus, LmWorldInfo};
+use crate::services::{LmBoundary, LmConvert, LmCreate, LmHandle, LmLog};
+use crate::types::{LmPaths, LmStats, LmStatus, LmStr, LmWorldInfo};
 
-// returns null when the paths are invalid or the runtime cannot start
+// registers with the mod manager and starts the runtime; null with `status` set when it cannot. Call it from the
+// mod's enable(), never from load(): it starts threads
 #[unsafe(no_mangle)]
-pub extern "C" fn lm_create(paths: *const LmPaths, log: LmLogFn) -> *mut LmHandle {
-    LogBridge::install(log);
-    LmBoundary::guard_value(std::ptr::null_mut(), || {
-        // SAFETY: the shim passes a pointer to an LmPaths it owns for the call, or null
-        let Some(paths) = (unsafe { LmBoundary::input(paths) }) else { return std::ptr::null_mut() };
-        // SAFETY: each LmStr in LmPaths points to bytes the shim owns for the call
-        let text = |s| unsafe { LmBoundary::text(s) };
-        let (Some(config), Some(data)) = (text(&paths.config_file), text(&paths.data_dir)) else {
-            return std::ptr::null_mut();
-        };
-        let runtime_paths = RuntimePaths { config_file: PathBuf::from(config), data_dir: PathBuf::from(data) };
-        match Runtime::new(runtime_paths) {
-            Ok(runtime) => Box::into_raw(Box::new(LmHandle::new(runtime))),
-            Err(error) => {
-                log::error!("levi-minimap could not start: {error}");
-                std::ptr::null_mut()
-            }
-        }
-    })
+pub extern "C" fn lm_create(paths: *const LmPaths, status: *mut LmStatus) -> *mut LmHandle {
+    let mut result = LmStatus::Panicked;
+    let handle = LmBoundary::guard_value(std::ptr::null_mut(), || {
+        let (handle, outcome) = LmCreate::create(paths);
+        result = outcome;
+        handle
+    });
+    // SAFETY: the shim passes a writable LmStatus for the call, or null
+    if let Some(status) = unsafe { LmBoundary::output(status) } {
+        *status = result;
+    }
+    handle
 }
 
-// flushes the store and frees the handle; the handle must not be used again
+// the shim unhooks first, so no tick runs; the session gives its leases back and unregisters, then the runtime
+// stops; the handle must not be used again
 #[unsafe(no_mangle)]
 pub extern "C" fn lm_destroy(handle: *mut LmHandle) {
     let _ = LmBoundary::guard(|| {
@@ -39,11 +32,24 @@ pub extern "C" fn lm_destroy(handle: *mut LmHandle) {
         }
         // SAFETY: a non-null handle came from lm_create and is destroyed exactly once
         let handle = unsafe { Box::from_raw(handle) };
-        handle.runtime.shutdown();
-        drop(handle);
+        let session = handle.session.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+        match session {
+            Some(session) => session.shutdown(),
+            None => handle.runtime.shutdown(),
+        }
         LmStatus::Ok
     });
-    LogBridge::uninstall();
+}
+
+// one line from the shim into the mod's log; level 1 error, 2 warn, 3 info, else debug
+#[unsafe(no_mangle)]
+pub extern "C" fn lm_log(level: u8, message: LmStr) {
+    let _ = LmBoundary::guard(|| {
+        // SAFETY: the shim passes the bytes of a string it owns for the call
+        let Some(message) = (unsafe { LmBoundary::text(&message) }) else { return LmStatus::InvalidArgument };
+        LmLog::write(level, &message);
+        LmStatus::Ok
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -68,7 +74,7 @@ pub extern "C" fn lm_enter_world(handle: *const LmHandle, info: *const LmWorldIn
         match handle.runtime.enter_world(&identity, info.dim) {
             Ok(()) => LmStatus::Ok,
             Err(error) => {
-                log::error!("world not entered: {error}");
+                curia::error!("world not entered", { error: error.to_string() });
                 LmStatus::Failed
             }
         }

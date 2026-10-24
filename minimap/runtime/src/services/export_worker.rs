@@ -41,7 +41,7 @@ impl ExportWorker {
     pub(crate) fn run(mut self) {
         while let Ok(job) = self.jobs.recv() {
             let path = match &job {
-                ExportJob::View { path, .. } | ExportJob::Area { path, .. } => path.clone(),
+                ExportJob::Area { path, .. } => path.clone(),
             };
             let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
             let message = match self.write(job) {
@@ -50,12 +50,12 @@ impl ExportWorker {
                     if path.exists()
                         && let Err(remove) = fs::remove_file(&path)
                     {
-                        log::warn!("partial export {} not removed: {remove}", path.display());
+                        curia::warn!("partial export not removed", { path: path.display().to_string(), error: remove.to_string() });
                     }
                     match error {
                         ExportError::Stopped => "Export stopped: the world was left".to_string(),
                         other => {
-                            log::warn!("export of {name} failed: {other}");
+                            curia::warn!("export failed", { file: name.as_str(), error: other.to_string() });
                             format!("Export failed: {other}")
                         }
                     }
@@ -63,7 +63,7 @@ impl ExportWorker {
             };
             self.busy.store(false, Ordering::SeqCst);
             if self.results.try_send(message).is_err() {
-                log::warn!("export result dropped: nobody is reading them");
+                curia::warn!("export result dropped: nobody is reading them");
             }
             self.row = Vec::new();
         }
@@ -71,20 +71,10 @@ impl ExportWorker {
 
     fn write(&mut self, job: ExportJob) -> Result<(), ExportError> {
         match job {
-            ExportJob::View { path, rgba, width, height, .. } => Self::write_view(&path, &rgba, width, height),
             ExportJob::Area { path, layout, regions, cache, dim, epoch } => {
                 self.write_area(&path, &layout, regions, cache.map(RegionFiles::new), (dim, epoch))
             }
         }
-    }
-
-    fn write_view(path: &Path, rgba: &[u8], width: u32, height: u32) -> Result<(), ExportError> {
-        let mut file = Self::create(path)?;
-        let mut writer = Self::encoder(&mut file, width, height).write_header()?;
-        writer.write_image_data(rgba)?;
-        writer.finish()?;
-        file.flush()?;
-        Ok(())
     }
 
     // at is (dim, epoch); a changed epoch means the world was left

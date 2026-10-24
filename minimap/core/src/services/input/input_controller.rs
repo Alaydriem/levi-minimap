@@ -1,17 +1,11 @@
 use crate::config::Config;
 use crate::services::draw::MapRotation;
-use crate::structs::input::{KeyInput, KeyResult, MouseAction, MouseInput};
+use crate::structs::input::{KeyPhase, KeyResult, KeybindAction, KeybindInput};
 use crate::structs::view::ViewState;
 
-// key and mouse decisions: world map toggle, minimap toggle and zoom, world map wheel zoom
+// keybind and pointer decisions: world map toggle, minimap toggle and zoom, world map wheel zoom and drag
 pub struct InputController {
-    toggle_key: i32,
-    zoom_in_key: i32,
-    zoom_out_key: i32,
-    // None while waypoints are turned off
-    add_waypoint_key: Option<i32>,
-    cave_key: i32,
-    coordinates_key: i32,
+    waypoints_enabled: bool,
     min_radius: i32,
     max_radius: i32,
     zoom_step: f32,
@@ -20,16 +14,9 @@ pub struct InputController {
 }
 
 impl InputController {
-    pub const ESCAPE: i32 = 0x1B;
-
     pub fn new(config: &Config) -> Self {
         Self {
-            toggle_key: config.world_map.toggle_key,
-            zoom_in_key: config.mini_map.zoom_in_key,
-            zoom_out_key: config.mini_map.zoom_out_key,
-            add_waypoint_key: config.waypoints.enabled.then_some(config.waypoints.add_key),
-            cave_key: config.cave_mode.toggle_key,
-            coordinates_key: config.mini_map.coordinates_key,
+            waypoints_enabled: config.waypoints.enabled,
             min_radius: config.mini_map.min_radius_chunks,
             max_radius: config.mini_map.max_radius_chunks,
             zoom_step: config.world_map.zoom_step,
@@ -38,79 +25,57 @@ impl InputController {
         }
     }
 
-    pub fn on_key(&self, view: &mut ViewState, input: KeyInput) -> KeyResult {
-        if view.world_map_open {
-            return self.on_key_with_map_open(view, input);
-        }
+    // on the closed map a keybind acts only while the game holds the mouse, so typing in chat is left alone;
+    // zoom acts on the key's repeats too, every other action on the press only
+    pub fn on_keybind(&self, view: &mut ViewState, input: KeybindInput) -> KeyResult {
         let mut result = KeyResult::default();
-        if !input.down || !input.mouse_grabbed {
+        let acts = match input.phase {
+            KeyPhase::Pressed => true,
+            KeyPhase::Repeat => matches!(input.action, KeybindAction::ZoomIn | KeybindAction::ZoomOut),
+            KeyPhase::Released => false,
+        };
+        if !acts || (!view.world_map_open && !input.mouse_grabbed) {
             return result;
         }
-        if input.code == self.toggle_key {
-            result.consume = true;
-            if input.ctrl {
-                view.show_minimap = !view.show_minimap;
-            } else {
-                view.world_map_open = true;
-                view.offset_x = 0.0;
-                view.offset_z = 0.0;
-                view.anchor = None;
-                result.action = MouseAction::ReleaseMouse;
+        match input.action {
+            KeybindAction::ToggleWorldMap if view.world_map_open => Self::close_world_map(view),
+            KeybindAction::ToggleWorldMap => Self::open_world_map(view),
+            KeybindAction::ToggleMinimap => view.show_minimap = !view.show_minimap,
+            KeybindAction::ZoomIn | KeybindAction::ZoomOut if !view.world_map_open => {
+                let step = if input.action == KeybindAction::ZoomIn { -1 } else { 1 };
+                let radius = (view.minimap_radius + step).clamp(self.min_radius, self.max_radius);
+                result.radius_changed = radius != view.minimap_radius;
+                view.minimap_radius = radius;
             }
-        } else if input.code == self.zoom_in_key || input.code == self.zoom_out_key {
-            result.consume = true;
-            let step = if input.code == self.zoom_in_key { -1 } else { 1 };
-            let radius = (view.minimap_radius + step).clamp(self.min_radius, self.max_radius);
-            result.radius_changed = radius != view.minimap_radius;
-            view.minimap_radius = radius;
-        } else if Some(input.code) == self.add_waypoint_key && !input.ctrl {
-            result.consume = true;
-            result.add_waypoint = true;
-        } else if input.code == self.coordinates_key && input.ctrl {
-            result.consume = true;
-            result.coordinates_changed = Self::toggle_coordinates(view);
-        } else if input.code == self.cave_key && !input.ctrl {
-            result.consume = true;
-            result.toggle_cave = true;
+            KeybindAction::AddWaypoint => result.add_waypoint = self.waypoints_enabled && !view.world_map_open,
+            KeybindAction::ToggleCave => result.toggle_cave = true,
+            KeybindAction::ToggleCoordinates => {
+                view.show_coordinates = !view.show_coordinates;
+                result.coordinates_changed = true;
+            }
+            KeybindAction::ZoomIn | KeybindAction::ZoomOut => {}
         }
         result
     }
 
-    fn toggle_coordinates(view: &mut ViewState) -> bool {
-        view.show_coordinates = !view.show_coordinates;
-        true
+    pub fn close_world_map(view: &mut ViewState) {
+        view.world_map_open = false;
+        view.anchor = None;
     }
 
-    // the open world map takes every key-down; the toggle key or Escape closes it
-    fn on_key_with_map_open(&self, view: &mut ViewState, input: KeyInput) -> KeyResult {
-        let mut result = KeyResult { consume: input.down, ..KeyResult::default() };
-        if !input.down {
-            return result;
-        }
-        if input.code == self.toggle_key && input.ctrl {
-            view.show_minimap = !view.show_minimap;
-        } else if input.code == self.toggle_key || input.code == Self::ESCAPE {
-            view.world_map_open = false;
-            view.anchor = None;
-            result.action = MouseAction::GrabMouse;
-        } else if input.code == self.coordinates_key && input.ctrl {
-            result.coordinates_changed = Self::toggle_coordinates(view);
-        } else if input.code == self.cave_key && !input.ctrl {
-            result.toggle_cave = true;
-        }
-        result
+    fn open_world_map(view: &mut ViewState) {
+        view.world_map_open = true;
+        view.offset_x = 0.0;
+        view.offset_z = 0.0;
+        view.anchor = None;
     }
 
-    // returns true when the game must not see the mouse event
-    pub fn on_mouse(&self, view: &mut ViewState, input: MouseInput) -> bool {
-        if !view.world_map_open {
-            return false;
+    // `lines` wheel notches over the open map, away from the player positive
+    pub fn on_wheel(&self, view: &mut ViewState, lines: f32) {
+        if !view.world_map_open || lines == 0.0 {
+            return;
         }
-        if input.button == MouseInput::WHEEL && input.data != 0 {
-            let factor = if input.data > 0 { self.zoom_step } else { 1.0 / self.zoom_step };
-            view.zoom = (view.zoom * factor).clamp(self.min_zoom, self.max_zoom);
-        }
-        input.data == 1 || input.button == MouseInput::WHEEL || input.button == 0
+        view.zoom = (view.zoom * self.zoom_step.powf(lines)).clamp(self.min_zoom, self.max_zoom);
     }
 
     // left-drag pan: the cursor moved by (dx, dy) screen pixels on a map turned by `angle` radians,

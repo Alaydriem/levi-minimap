@@ -1,11 +1,10 @@
 #include "world/WorldTracker.h"
 
 #include "bridge/RustBridge.h"
-#include "input/InputListeners.h"
 #include "mod/MinimapMod.h"
-#include "render/DX11Hook.h"
 #include "world/BlockListener.h"
 #include "world/ColumnProbe.h"
+#include "world/GameWindow.h"
 
 #include <mc/client/game/ClientInstance.h>
 #include <mc/client/player/LocalPlayer.h>
@@ -18,6 +17,8 @@
 
 #include <windows.h>
 
+#include <psapi.h>
+
 #include <string>
 
 namespace levi_minimap {
@@ -25,6 +26,9 @@ namespace levi_minimap {
 namespace {
 
 bool         g_inWorld        = false;
+uint64_t     g_workingSet     = 0;
+uint64_t     g_privateBytes   = 0;
+uint32_t     g_ticks          = 0;
 int          g_dimension      = -1;
 BlockSource* g_listenerSource = nullptr;
 
@@ -101,6 +105,37 @@ void answerBiomes(const LmHandle* handle, Level& level, const LmScanPlan& plan) 
     }
 }
 
+// process memory for telemetry, read about once a second at 20 ticks a second; the call takes microseconds
+void sampleMemory() {
+    constexpr uint32_t kEveryTicks = 20;
+    if (g_ticks++ % kEveryTicks != 0) return;
+    PROCESS_MEMORY_COUNTERS_EX counters{};
+    counters.cb = sizeof(counters);
+    if (K32GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters), sizeof(counters))) {
+        g_workingSet   = counters.WorkingSetSize;
+        g_privateBytes = counters.PrivateUsage;
+    }
+}
+
+// the window and cursor state every tick sends, in a world or not
+LmTickInput windowInput() {
+    HWND       hwnd = GameWindow::hwnd();
+    CURSORINFO cursor{sizeof(CURSORINFO)};
+    LmTickInput input{};
+    input.foreground    = static_cast<uint8_t>(hwnd && GetForegroundWindow() == hwnd);
+    input.cursor_hidden = static_cast<uint8_t>(GetCursorInfo(&cursor) && cursor.flags == 0);
+    return input;
+}
+
+// out of a world Rust still ticks with no player: it drains the manager's events and gives its leases back
+void tickOutOfWorld(const LmHandle* handle, ClientInstance& client) {
+    LmTickInput input   = windowInput();
+    input.mouse_grabbed = static_cast<uint8_t>(client.getMouseGrabbed());
+    LmScanPlan plan{};
+    if (lm_tick(handle, &input, &plan) != LM_STATUS_OK) return;
+    WorldTracker::applyCursor(plan.cursor);
+}
+
 } // namespace
 
 void WorldTracker::update(ClientInstance& client) {
@@ -112,16 +147,15 @@ void WorldTracker::update(ClientInstance& client) {
         if (g_inWorld) {
             detach();
             lm_leave_world(handle);
-            InputListeners::setClientInstance(nullptr);
             g_inWorld = false;
         }
+        tickOutOfWorld(handle, client);
         return;
     }
 
     int dimension = static_cast<int>(player->getDimensionId());
     if (!g_inWorld) {
         enterWorld(handle, client, *player, dimension);
-        InputListeners::setClientInstance(&client);
         attachListener(player->getDimensionBlockSource());
         g_inWorld   = true;
         g_dimension = dimension;
@@ -130,22 +164,19 @@ void WorldTracker::update(ClientInstance& client) {
         g_dimension = dimension;
     }
 
-    HWND       hwnd       = DX11Hook::getHwnd();
-    bool       foreground = hwnd && GetForegroundWindow() == hwnd;
-    CURSORINFO cursor{sizeof(CURSORINFO)};
-    bool       hidden = GetCursorInfo(&cursor) && cursor.flags == 0;
-    const auto& pos   = player->getPosition();
-    LmTickInput input{
-        1,
-        static_cast<uint8_t>(foreground),
-        static_cast<uint8_t>(hidden),
-        static_cast<uint8_t>(!player->isAlive()),
-        pos.x,
-        pos.y,
-        pos.z,
-        player->getRotation().y,
-        dimension
-    };
+    const auto& pos = player->getPosition();
+    sampleMemory();
+    LmTickInput input       = windowInput();
+    input.present           = 1;
+    input.dead              = static_cast<uint8_t>(!player->isAlive());
+    input.mouse_grabbed     = static_cast<uint8_t>(client.getMouseGrabbed());
+    input.x                 = pos.x;
+    input.y                 = pos.y;
+    input.z                 = pos.z;
+    input.yaw               = player->getRotation().y;
+    input.dim               = dimension;
+    input.working_set_bytes = g_workingSet;
+    input.private_bytes     = g_privateBytes;
     LmScanPlan plan{};
     if (lm_tick(handle, &input, &plan) != LM_STATUS_OK) return;
     ColumnProbe::configure(plan.camera_height, plan.transparent_water != 0, plan.block_colors, plan.block_color_count);
@@ -155,7 +186,7 @@ void WorldTracker::update(ClientInstance& client) {
 }
 
 void WorldTracker::applyCursor(unsigned char action) {
-    HWND hwnd = DX11Hook::getHwnd();
+    HWND hwnd = GameWindow::hwnd();
     if (!hwnd || GetForegroundWindow() != hwnd) return;
     if (action == 1) {
         RECT client;
@@ -174,6 +205,12 @@ void WorldTracker::detach() {
         g_listenerSource->removeListener(BlockListener::getInstance());
         g_listenerSource = nullptr;
     }
+}
+
+void WorldTracker::reset() {
+    detach();
+    g_inWorld   = false;
+    g_dimension = -1;
 }
 
 } // namespace levi_minimap

@@ -1,4 +1,4 @@
-use minimap_core::structs::ui::MapAction;
+use minimap_core::structs::ui::{HoverInfo, MapAction};
 
 use crate::support::Scene;
 
@@ -35,6 +35,26 @@ fn the_overlay_rows_say_zoom_in_below_the_overlay_zoom() {
     scene.settle();
 
     assert!(scene.mesh.draws_text("zoom in"));
+}
+
+#[test]
+fn a_long_biome_name_wraps_inside_the_card() {
+    let mut scene = Scene::new(false);
+    scene.settle();
+    let title = scene.right_of("World map");
+    // with no hover the rows show a dash at the right edge of the card's content
+    let edge = scene.right_of("\u{2014}");
+    let biome = "Windswept Gravelly Hills Beyond The Old Growth Birch Forest";
+    scene.hover = Some(HoverInfo { block: (214, -88), chunk: (13, -6), biome: Some(biome) });
+
+    scene.settle();
+
+    assert_eq!(scene.right_of("World map"), title, "the card grew wider");
+    let parts: Vec<_> = scene.mesh.text_rects.iter().filter(|t| biome.contains(scene.mesh.text_of(t).trim())).collect();
+    assert!(!parts.is_empty(), "the biome is not drawn");
+    assert!(parts.iter().all(|t| t.rect[2] <= edge + 0.5), "the biome runs past the card: {parts:?}");
+    let label = scene.right_of("Biome");
+    assert!(parts.iter().all(|t| t.rect[0] >= label), "the biome runs over its label: {parts:?}");
 }
 
 #[test]

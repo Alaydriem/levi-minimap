@@ -8,15 +8,19 @@
 
 namespace levi_minimap {
 
-// owns the Rust handle and the log callback; every call into Rust goes through handle()
+// owns the Rust handle; every call into Rust goes through handle()
 class RustBridge {
 public:
-    static bool create(const std::filesystem::path& configFile, const std::filesystem::path& dataDir);
+    // LM_STATUS_OK when the mod registered with the manager and the runtime started
+    static LmStatus create(const std::filesystem::path& configDir, const std::filesystem::path& dataDir);
 
     static void destroy();
 
     // null before create and after destroy
     static const LmHandle* handle();
+
+    // one line into the mod's log through Rust; level 1 error, 2 warn, 3 info, else debug
+    static void log(uint8_t level, std::string_view message);
 
     // UTF-8 view of a string the caller keeps alive for the call
     static LmStr str(std::string_view text);

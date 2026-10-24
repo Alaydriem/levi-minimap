@@ -2,289 +2,131 @@
 
 # Alaydriem's Mini Map
 
-**A minimap and full world map for Minecraft Bedrock on Windows, loaded by LeviLamina.**
-
 [![Release](https://img.shields.io/github/v/release/alaydriem/levi-minimap?include_prereleases)](https://github.com/alaydriem/levi-minimap/releases)
 [![Build](https://img.shields.io/github/actions/workflow/status/alaydriem/levi-minimap/build.yml?branch=master&label=build)](https://github.com/alaydriem/levi-minimap/actions/workflows/build.yml)
 [![License](https://img.shields.io/github/license/alaydriem/levi-minimap)](./LICENSE)
 ![Minecraft Bedrock](https://img.shields.io/badge/Minecraft_Bedrock-1.26.51-62B47A)
 [![LeviLamina](https://img.shields.io/badge/LeviLamina-26.51.6-4A90D9)](https://github.com/LiteLDev/LeviLamina)
-![Windows](https://img.shields.io/badge/Windows-x64-0078D6)
-
-[Install](#-installation) · [Controls](#%EF%B8%8F-controls) · [Configuration](#%EF%B8%8F-configuration) · [FAQ](#-faq) · [Build](#%EF%B8%8F-building-from-source)
 
 </div>
 
-Alaydriem's Mini Map draws a minimap in the corner of your screen and a full-screen world map of everything you have explored. It keeps waypoints for each world, shows the way to your last death, has a cave mode for underground, and exports the map to PNG.
+A minimap and full-screen world map for Minecraft Bedrock, with waypoints, cave mode and PNG export.
 
-> [!NOTE]
-> This is a **client-side** mod. It needs no server plugin, and it reads only the chunks that the game has already loaded on your machine.
+Client-side only. The map is built from the chunks your game has already loaded.
 
----
+## Features
 
-## ✨ Features
-
-- **🧭 Minimap**
-  - Round minimap with a chunk grid, the current chunk outlined, and your position and heading.
-  - Coordinates under the map, with the matching Nether or Overworld coordinates (1:8).
-  - Zoom with keys. Optional mode that turns the map with the player.
-- **🗺️ World map**
-  - Full-screen map of every area you have explored, in each dimension.
-  - Zoom with the mouse wheel, pan with a left-drag.
-  - A tools panel shows the block, chunk and biome under the cursor.
-  - Optional chunk grid and slime chunk overlays, drawn only over chunks you have explored.
-  - Right-click menu: add, edit or remove a waypoint, copy coordinates, show or hide waypoints, export the view or the whole explored area.
-- **📍 Waypoints**
-  - Add a waypoint at your position with one key, or anywhere on the world map.
-  - A waypoint list with search and the distance to each waypoint. Click a waypoint to centre the map on it.
-  - 12 colours to choose from.
-  - A death point for each world, kept even when the waypoint list is full.
-  - Arrows at the minimap edge point to waypoints out of view.
-  - Saved for each world, so they come back when you load the world again.
-- **⛏️ Cave mode**
-  - Shows a band of blocks around your feet, so you can map caves and tunnels.
-- **🎨 Terrain shading**
-  - Hill shading with three styles, adjustable light direction, and water that gets darker with depth.
-  - Your own colour for any block or biome, set in the config file.
-- **🖼️ Export**
-  - Save the current view, or the whole explored area, as a PNG image.
-- **💾 Disk cache**
-  - Explored areas are saved to disk, so the map is ready the next time you play.
-  - Memory use has a fixed budget that you can set in the config file.
+- Round minimap with chunk grid, coordinates and Nether / Overworld coordinates
+- Full-screen world map of everything you've explored, in every dimension
+- Block, chunk and biome info under the cursor
+- Chunk grid and slime chunk overlays
+- Waypoints per world, with search, distances, colours and a death point
+- Cave mode for mapping underground
+- Terrain shading, depth-shaded water and custom block / biome colours
+- Export the view or the whole explored area to PNG
+- Explored areas are cached on disk
 
 <table>
   <tr>
-    <td align="center" width="50%"><img src="./assets/minimap-overworld.jpg" alt="The minimap in the top-right corner while exploring" width="420"><br><sub>The minimap while exploring</sub></td>
-    <td align="center" width="50%"><img src="./assets/world-map-tools.jpg" alt="The world map with the tools panel, the chunk grid and a waypoint" width="420"><br><sub>World map with the tools panel</sub></td>
+    <td width="50%"><img src="./assets/minimap-overworld.jpg" alt="Minimap"></td>
+    <td width="50%"><img src="./assets/world-map-tools.jpg" alt="World map"></td>
   </tr>
   <tr>
-    <td align="center" width="50%"><img src="./assets/export-overworld.jpg" alt="An exported view of the Overworld" width="420"><br><sub>Overworld, exported to PNG</sub></td>
-    <td align="center" width="50%"><img src="./assets/export-overworld-chunk-grid.jpg" alt="An exported view of the Overworld with the chunk grid" width="420"><br><sub>Chunk grid over explored chunks</sub></td>
+    <td width="50%"><img src="./assets/export-overworld.jpg" alt="Overworld export"></td>
+    <td width="50%"><img src="./assets/export-overworld-chunk-grid.jpg" alt="Chunk grid"></td>
   </tr>
   <tr>
-    <td align="center" width="50%"><img src="./assets/export-nether.jpg" alt="An exported view of the Nether" width="420"><br><sub>The Nether</sub></td>
-    <td align="center" width="50%"><img src="./assets/export-end.jpg" alt="An exported view of the End island" width="420"><br><sub>The End</sub></td>
+    <td width="50%"><img src="./assets/export-nether.jpg" alt="Nether"></td>
+    <td width="50%"><img src="./assets/export-end.jpg" alt="End"></td>
   </tr>
 </table>
 
----
+## Installation
 
-## 📦 Installation
-
-You need [LeviLamina](https://github.com/LiteLDev/LeviLamina) for the **client**, on a supported game version (see [Compatibility](#-compatibility)).
-
-Install with [lip](https://github.com/LiteLDev/lip). Run this command in your game folder:
+Requires the client build of [LeviLamina](https://github.com/LiteLDev/LeviLamina) and [Alaydriem's Mod Manager](https://github.com/alaydriem/levi-modmanager).
 
 ```powershell
 lip install github.com/alaydriem/levi-minimap#client
 ```
 
-To remove the mod:
+Or download the zip from the [latest release](https://github.com/alaydriem/levi-minimap/releases/latest) and extract it into `mods/`.
 
-```powershell
-lip uninstall github.com/alaydriem/levi-minimap
-```
+| Mini Map | Minecraft Bedrock | LeviLamina | Mod Manager |
+| --- | --- | --- | --- |
+| 0.1.0 | 1.26.51 | 26.51.6+ | 0.1.x |
 
-<details>
-<summary><b>Manual install</b></summary>
+## Controls
 
-1. Download `alaydriem-minimap-<version>-client-windows-x64.zip` from the [latest release](https://github.com/alaydriem/levi-minimap/releases/latest).
-2. Extract it into your game's `mods` folder. The result must be `mods/alaydriem-minimap/alaydriem-minimap.dll`.
-3. Start the game.
+| Key | Action |
+| --- | --- |
+| <kbd>M</kbd> | Open / close the world map |
+| <kbd>Ctrl</kbd> + <kbd>M</kbd> | Show / hide the minimap |
+| <kbd>=</kbd> / <kbd>-</kbd> | Zoom the minimap |
+| <kbd>N</kbd> | Add a waypoint at your position |
+| <kbd>K</kbd> | Cave mode on / off |
+| <kbd>Ctrl</kbd> + <kbd>K</kbd> | Show / hide coordinates |
+| <kbd>Esc</kbd> | Close the world map, menu or dialog |
+| Mouse wheel | Zoom the world map |
+| Left-drag | Pan the world map |
+| Right-click | Map menu (waypoints, copy coordinates, export) |
+| <kbd>Ctrl</kbd> + <kbd>Z</kbd> | Undo a waypoint removal |
 
-The folder name must stay `alaydriem-minimap`. LeviLamina does not load the mod from a folder with a different name.
+The first seven keys can be changed on the mod manager's Keybinds page.
 
-</details>
+## Configuration
 
----
+Settings are in the mod manager panel and saved to `mods/alaydriem-minimap/config/config.hcl`.
 
-## ✅ Compatibility
-
-| Mod version | Minecraft Bedrock (Windows) | LeviLamina |
+| Setting | Default | Description |
 | --- | --- | --- |
-| 0.1.0 | 1.26.51 | 26.51.6 or later 26.51.x |
+| `mini_map.radius_chunks` | `5` | Minimap radius in chunks |
+| `mini_map.size_ratio` | `0.15` | Minimap size as a fraction of screen width |
+| `mini_map.rotate_with_player` | `false` | Rotate the minimap with the player |
+| `mini_map.show_nether_coordinates` | `true` | Show Nether / Overworld coordinates |
+| `world_map.rotate_with_player` | `false` | Rotate the world map with the player |
+| `world_map.show_chunk_grid` / `show_slime_chunks` | `false` | Chunk grid and slime chunks |
+| `waypoints.max_per_world` | `512` | Max waypoints per world |
+| `terrain.shadow.render_style` | Shadow map | Flat, Gradient or Shadow map |
+| `terrain.enable_transparent_water` | `true` | Show the ground under shallow water |
+| `memory.gpu_texture_budget_mb` | `496` | GPU memory for map tiles |
 
-The mod hooks into the game directly. A new game version needs a new mod release.
+Custom colours and the export folder are set in `config.hcl` only:
 
----
+```hcl
+terrain {
+  block_colors          = { "minecraft:lava" = [230, 110, 20, 255] }
+  biome_color_overrides = { "the_end" = [16, 12, 26, 255] }
+}
 
-## ⌨️ Controls
-
-| Key | Action | When |
-| --- | --- | --- |
-| <kbd>M</kbd> | Open or close the world map | In game |
-| <kbd>Ctrl</kbd> + <kbd>M</kbd> | Show or hide the minimap | In game, or world map open |
-| <kbd>=</kbd> / <kbd>-</kbd> | Zoom the minimap in / out | In game |
-| <kbd>N</kbd> | Add a waypoint at your position | In game |
-| <kbd>K</kbd> | Cave mode on / off | In game, or world map open |
-| <kbd>Ctrl</kbd> + <kbd>K</kbd> | Show or hide coordinates | In game, or world map open |
-| <kbd>Esc</kbd> | Close the world map, menu or dialog | World map open |
-| Mouse wheel | Zoom the world map | World map open |
-| Left-drag | Pan the world map | World map open |
-| Right-click | Open the map menu | World map open |
-| <kbd>Ctrl</kbd> + <kbd>Z</kbd> | Bring back the waypoint you just removed | A few seconds after a removal |
-| <kbd>Enter</kbd> / <kbd>Esc</kbd> | Save / cancel the waypoint dialog | Dialog open |
-| Click a waypoint in the list | Centre the world map on it | Waypoint list open |
-
-> [!TIP]
-> Every key is a setting in `config.json`, written as a [Windows virtual-key code](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes). For example, `77` (`0x4D`) is <kbd>M</kbd>.
-
----
-
-## ⚙️ Configuration
-
-The config file is `mods/alaydriem-minimap/config/config.json`. The mod writes it with the default values the first time it starts. A key that you remove from the file uses its default. A value out of range is changed to the nearest allowed value, and the game log shows a warning.
-
-The settings that most players change:
-
-| Setting | Default | What it does |
-| --- | --- | --- |
-| `miniMap.radiusChunks` | `5` | How many chunks the minimap shows from its centre |
-| `miniMap.sizeRatio` | `0.15` | Minimap size, as a fraction of the screen width |
-| `miniMap.rotateWithPlayer` | `false` | Turn the minimap with the player |
-| `miniMap.showNetherCoordinates` | `true` | Also show the Nether or Overworld coordinates |
-| `worldMap.rotateWithPlayer` | `false` | Turn the world map with the player |
-| `worldMap.showChunkGrid` / `showSlimeChunks` | `false` | Start with the chunk grid or the slime chunks shown |
-| `waypoints.maxPerWorld` | `512` | Maximum waypoints in one world |
-| `terrain.shadow.renderStyle` | `2` | Shading style: `0`, `1` or `2` |
-| `terrain.enableTransparentWater` | `true` | Show the ground under shallow water |
-| `terrain.blockColors` | lava only | Your own colour for a block, as `[r, g, b, a]` |
-| `terrain.biomeColorOverrides` | the End only | Your own colour for a biome where a column has no blocks, as `[r, g, b, a]` |
-| `export.folder` | empty | Export folder. Empty means `Pictures/Screenshots` |
-
-<details>
-<summary><b>Full reference</b></summary>
-
-Colours in `miniMap` are numbers in the form `0xRRGGBBAA`. Colours in `terrain` are `[r, g, b, a]` arrays. Keys are Windows virtual-key codes.
-
-| Section | Setting | Default |
-| --- | --- | --- |
-| top level | `fontSize` | `18.0` |
-| `miniMap` | `sizeRatio` | `0.15` |
-| | `radiusChunks` / `minRadiusChunks` / `maxRadiusChunks` | `5` / `2` / `16` |
-| | `marginRight` / `marginTop` | `20` / `20` |
-| | `widgetScale` | `1.0` |
-| | `lineThickness` / `borderThickness` / `coordTextMargin` | `1.0` / `2.0` / `8.0` |
-| | `backgroundColor` / `chunkLineColor` / `currentChunkColor` / `borderColor` | `0x000000FF` / `0x787878FF` / `0x3AA0FFFF` / `0x505050FF` |
-| | `playerArrowOutlineColor` / `playerArrowFillColor` | `0x000000FF` / `0xDC3232FF` |
-| | `coordTextColor` / `coordShadowColor` | `0xFFFFFFFF` / `0x000000C8` |
-| | `zoomInKey` / `zoomOutKey` | `0xBB` (<kbd>=</kbd>) / `0xBD` (<kbd>-</kbd>) |
-| | `showCoordinates` / `coordinatesKey` | `true` / `0x4B` (<kbd>Ctrl</kbd> + <kbd>K</kbd>) |
-| | `showNetherCoordinates` / `rotateWithPlayer` | `true` / `false` |
-| `worldMap` | `toggleKey` | `0x4D` (<kbd>M</kbd>) |
-| | `minZoom` / `maxZoom` / `zoomStep` | `0.2` / `40.0` / `1.15` |
-| | `showCoordinates` / `showNetherCoordinates` / `rotateWithPlayer` | `true` / `true` / `false` |
-| | `waypointLabelZoom` | `0.5` |
-| | `showChunkGrid` / `showSlimeChunks` | `false` / `false` |
-| | `hoverBiomeRegions` / `slimeCacheRegions` / `uiEventCapacity` | `16` / `1024` / `64` |
-| | `maxNewTexturesPerFrame` / `textureIdleFrames` | `4` / `600` |
-| `waypoints` | `enabled` / `addKey` | `true` / `0x4E` (<kbd>N</kbd>) |
-| | `maxPerWorld` / `showOnMinimap` / `maxEdgeArrows` / `labelScale` | `512` / `true` / `16` / `1.0` |
-| `caveMode` | `toggleKey` | `0x4B` (<kbd>K</kbd>) |
-| | `bandSize` / `bandMargin` / `scanRadius` / `solidColor` | `16` / `2` / `64` / `[96, 96, 96, 255]` |
-| `terrain` | `enable` / `scanRadius` / `scanMaxChunksPerFrame` | `true` / `128` / `32` |
-| | `rescanIntervalFrames` / `regionBakeThreshold` | `1200` / `64` |
-| | `enableDiskCache` / `enableTransparentWater` | `true` / `true` |
-| | `waterOpacityPerDepth` / `waterMaxOpacity` | `0.1` / `0.6` |
-| | `blockColors` (max 64) | `{ "minecraft:lava": [230, 110, 20, 255] }` |
-| | `biomeColorOverrides` (max 64) | `{ "the_end": [16, 12, 26, 255] }` |
-| `terrain.shadow` | `renderStyle` / `shadowLevel` / `renderScale` / `pcfRadius` | `2` / `130` / `2` / `1` |
-| | `lightAzimuth` / `lightZenith` | `315.0` / `60.0` |
-| `smoothCamera` | `springStrength` / `damping` / `maxDeltaTime` | `36.0` / `7.0` / `0.1` |
-| `memory` | `chunkSurfaceBudgetMb` / `tileBudgetMb` / `tileOverrunPercent` / `gpuTextureBudget` | `64` / `256` / `25` / `1024` |
-| `bake` | `workerThreads` (`0` = automatic) / `queueCapacity` | `0` / `4096` |
-| `store` | `journalMaxMb` / `syncIntervalMs` / `writeQueueCapacity` | `64` / `1000` / `1024` |
-| `export` | `maxPixels` / `folder` | `16384` / `""` |
-| `debug` | `telemetry` / `telemetryIntervalMs` / `captureProbes` | `false` / `1000` / `false` |
-
-The default override draws the End's void near black with a purple tint. A biome name in `biomeColorOverrides` works with or without the `minecraft:` prefix:
-
-```json
-{
-  "terrain": {
-    "biomeColorOverrides": { "cherry_grove": [242, 184, 216, 255] }
-  }
+export {
+  # empty means Pictures/Screenshots
+  folder = ""
 }
 ```
 
-</details>
+Waypoints and the map cache are in `mods/alaydriem-minimap/data/`.
 
----
+## FAQ
 
-## ❓ FAQ
+**Part of the map is empty.** The map only shows chunks your game has loaded. Visit the area once and it stays.
 
-<details>
-<summary><b>The mod does not load.</b></summary>
+**Can I use it on servers?** Yes, but some servers don't allow minimaps. Check the rules first.
 
-Check that LeviLamina is the **client** build for your game version (see [Compatibility](#-compatibility)), and that the mod folder is named exactly `mods/alaydriem-minimap/`. The LeviLamina log in the game folder's `logs` folder names the cause.
+**The biome shows a dash.** Areas explored with an older version have no biome saved. Revisit them to fill it in.
 
-</details>
+## Building
 
-<details>
-<summary><b>Part of the world map is empty.</b></summary>
-
-The map shows only chunks that your game has loaded. Visit the area once, and it stays on the map, also after a restart.
-
-</details>
-
-<details>
-<summary><b>Can I use it on servers and Realms?</b></summary>
-
-The mod is client-side and works wherever LeviLamina runs. Some servers do not allow minimaps. Read the server's rules before you use it there.
-
-</details>
-
-<details>
-<summary><b>The biome under the cursor shows a dash.</b></summary>
-
-The mod learns each biome when it scans a chunk. Land you explored with an older version of the mod has no biome saved. Go back to it, and the mod fills in the biome when it scans the chunks again.
-
-</details>
-
-<details>
-<summary><b>Where are my waypoints and the map cache?</b></summary>
-
-In `mods/alaydriem-minimap/data/`. Waypoints are kept for each world.
-
-</details>
-
-<details>
-<summary><b>A key does nothing.</b></summary>
-
-Most keys do nothing while a game menu or chat is open. If another mod uses the same key, change the key in `config.json` (see [Controls](#%EF%B8%8F-controls)).
-
-</details>
-
----
-
-## 🛠️ Building from source
-
-You need Windows 10 or 11 (x64) and [mise](https://mise.jdx.dev). mise installs the pinned versions of xmake and cbindgen. You also need Rust through rustup (the version is pinned in `rust-toolchain.toml`), [cargo-nextest](https://nexte.st), and LLVM with `clang-cl`.
+Requires Windows x64, [mise](https://mise.jdx.dev), rustup, [cargo-nextest](https://nexte.st) and LLVM (`clang-cl`).
 
 ```powershell
-git clone https://github.com/alaydriem/levi-minimap
-cd levi-minimap
 mise trust
-mise run preflight   # names any missing tool
-mise run build-mod   # output: shim/bin/alaydriem-minimap/
-mise run test        # every Rust test
+mise run preflight
+mise run build-mod
+mise run test
 ```
 
-<details>
-<summary><b>How the code is organised</b></summary>
+## License
 
-Nearly all the logic is in Rust: `minimap/core` (map logic, no game or GPU code), `minimap/store` (disk cache), `minimap/ui` (the interface, built with egui), `minimap/runtime`, and `minimap/ffi` (the C interface). A thin C++ part in `shim/` connects to the game through LeviLamina and draws the interface with Direct3D 11. Run `mise tasks` to see every build, test and bench task.
+BSD 3-Clause. See [LICENSE](./LICENSE). [Nordwand Mono](https://github.com/tywr/Nordwand-Mono) is under the SIL Open Font License 1.1.
 
-</details>
-
----
-
-## 🔗 Related
-
-- [Alaydriem's Freecam](https://github.com/alaydriem/levi-freecam): a free camera with smooth motion and camera paths, for the same game and loader.
-
-## 📄 License and credits
-
-BSD 3-Clause. See [LICENSE](./LICENSE).
-
-Thanks to [CoralMap](https://github.com/CoralFans-Dev/CoralMap) for the inspiration, and to [LeviLamina](https://github.com/LiteLDev/LeviLamina) and [egui](https://github.com/emilk/egui).
+Inspired by [CoralMap](https://github.com/CoralFans-Dev/CoralMap).

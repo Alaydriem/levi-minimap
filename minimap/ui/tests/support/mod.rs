@@ -1,7 +1,7 @@
 pub mod frames;
-pub mod headless;
+pub mod icon_text;
 pub mod scene;
 
 pub use frames::Frames;
-pub use headless::Headless;
+pub use icon_text::IconText;
 pub use scene::Scene;
