@@ -1,7 +1,10 @@
+use std::hash::{Hash, Hasher};
+
 use egui::Id;
+use levi_ui::id::IdScope;
 
 /// The egui ids of the minimap's world map views.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MinimapUiId {
     /// The map layer under the cards.
     Map,
@@ -19,6 +22,13 @@ pub enum MinimapUiId {
     DialogName,
     /// One colour swatch in the dialog, with its index.
     Swatch,
+}
+
+impl Hash for MinimapUiId {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        IdScope::hash_type::<Self, H>(state);
+        std::mem::discriminant(self).hash(state);
+    }
 }
 
 impl MinimapUiId {

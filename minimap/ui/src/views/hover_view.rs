@@ -1,5 +1,5 @@
 use egui::text::{LayoutJob, TextFormat};
-use egui::{Align, Color32, Layout, RichText, Ui};
+use egui::{Align, Color32, Label, Layout, RichText, Ui};
 use levi_i18n::text::Text;
 use levi_ui::draw::{TextStyle, TypeSize};
 use levi_ui::font::FontFace;
@@ -40,8 +40,9 @@ impl HoverView {
         ui.horizontal(|ui| {
             ui.set_min_height(<spacing::Row as SpacingToken>::VALUE);
             ui.label(Words::rich(ui, &Text::message(label), Self::LABEL, <color::TextDim as ColorToken>::VALUE));
+            // a value wraps in the room right of the label (a long biome name), right-aligned
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| match value {
-                Some(job) => ui.label(job),
+                Some(job) => ui.add(Label::new(job).wrap()),
                 None => {
                     let dash = RichText::new(Self::NO_DATA).font(Self::LABEL.font_id());
                     ui.label(dash.color(<color::TextFaint as ColorToken>::VALUE))

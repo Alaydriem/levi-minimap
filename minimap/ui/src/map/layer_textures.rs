@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use egui::{ColorImage, Context, Id, TextureHandle, TextureId, TextureOptions};
-use minimap_core::services::draw::GpuResidency;
 use minimap_core::structs::draw::TextureOp;
 
 // the map textures of one layer, as egui textures of the manager's context for that layer. A texture
@@ -32,8 +31,8 @@ impl LayerTextures {
         true
     }
 
-    // uploads and releases; an upload names its pixels by index into `buffers`, straight-alpha RGBA. Region
-    // tiles ask for nearest sampling, the corner map for linear
+    // uploads and releases; an upload names its pixels by index into `buffers`, straight-alpha RGBA. Every
+    // texture samples nearest, so a block stays a sharp square when the map scales it up
     pub fn apply(&mut self, ctx: &Context, ops: &[TextureOp], buffers: &[Vec<u8>]) {
         for op in ops {
             match *op {
@@ -44,11 +43,11 @@ impl LayerTextures {
                         continue;
                     }
                     let image = ColorImage::from_rgba_unmultiplied(size, pixels);
-                    let options = Self::options(tex);
                     if let Some(handle) = self.handles.get_mut(&tex) {
-                        handle.set(image, options);
+                        handle.set(image, TextureOptions::NEAREST);
                     } else if self.handles.len() < self.capacity {
-                        self.handles.insert(tex, ctx.load_texture(format!("minimap.{tex}"), image, options));
+                        self.handles
+                            .insert(tex, ctx.load_texture(format!("minimap.{tex}"), image, TextureOptions::NEAREST));
                     }
                 }
                 TextureOp::Release { tex } => {
@@ -72,9 +71,5 @@ impl LayerTextures {
 
     pub fn is_empty(&self) -> bool {
         self.handles.is_empty()
-    }
-
-    fn options(tex: u32) -> TextureOptions {
-        if tex == GpuResidency::MINIMAP_TEXTURE { TextureOptions::LINEAR } else { TextureOptions::NEAREST }
     }
 }

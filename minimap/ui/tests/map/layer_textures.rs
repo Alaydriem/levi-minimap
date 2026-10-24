@@ -17,7 +17,7 @@ fn pass(harness: &mut UiHarness, layer: &mut LayerTextures, ops: &[TextureOp], b
 }
 
 #[test]
-fn textures_load_into_the_layer_context_with_nearest_tiles_and_a_linear_corner_map() {
+fn textures_load_into_the_layer_context_with_nearest_sampling_for_tiles_and_the_corner_map() {
     let mut harness = UiHarness::new();
     let mut layer = LayerTextures::new(4);
     let mut buffers = Vec::new();
@@ -28,7 +28,7 @@ fn textures_load_into_the_layer_context_with_nearest_tiles_and_a_linear_corner_m
     let set: Vec<_> = out.textures_set.iter().filter(|(_, size, _)| *size == [256, 256]).collect();
     assert_eq!(set.len(), 2);
     let options = |tex: u32| set.iter().find(|(id, _, _)| Some(*id) == layer.id(tex)).map(|(_, _, options)| *options);
-    assert_eq!(options(GpuResidency::MINIMAP_TEXTURE), Some(TextureOptions::LINEAR));
+    assert_eq!(options(GpuResidency::MINIMAP_TEXTURE), Some(TextureOptions::NEAREST));
     assert_eq!(options(7), Some(TextureOptions::NEAREST));
 }
 

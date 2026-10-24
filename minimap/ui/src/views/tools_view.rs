@@ -26,6 +26,8 @@ impl ToolsView {
     const ROW: TextStyle = TextStyle::new(TypeSize::Body, FontFace::Regular);
     const NOTE: TextStyle = TextStyle::new(TypeSize::Note, FontFace::Regular);
     const WAYPOINTS_ROW: f32 = 32.0;
+    // the count badge on the waypoint list switch
+    const COUNT_BADGE: egui::Vec2 = vec2(28.0, 18.0);
 
     // returns the card's bottom edge, where the waypoint list starts
     pub fn show(ctx: &Context, frame: &UiFrame<'_>, actions: &mut Vec<MapAction>) -> f32 {
@@ -101,7 +103,7 @@ impl ToolsView {
             IconSize::Regular,
             icon,
         );
-        let badge = Rect::from_center_size(pos2(rect.right() - 36.0, y), vec2(28.0, 18.0));
+        let badge = Rect::from_center_size(pos2(rect.right() - 36.0, y), Self::COUNT_BADGE);
         let text = <color::Text as ColorToken>::VALUE;
         let room = badge.left() - 8.0 - (rect.left() + 26.0);
         let label = Text::message(MinimapMessage::Waypoints);

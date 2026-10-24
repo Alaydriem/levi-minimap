@@ -43,7 +43,7 @@ impl DialogView {
         Self::dim(ctx);
         let id = MinimapUiId::Dialog.id();
         let medium = <spacing::M as SpacingToken>::VALUE;
-        Area::new(id).anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0)).order(Order::Foreground).show(ctx, |ui| {
+        Area::new(id).anchor(Align2::CENTER_CENTER, egui::Vec2::ZERO).order(Order::Foreground).show(ctx, |ui| {
             let frame = Surface::frame(SurfaceLevel::Card, Elevation::Floating).inner_margin(Self::PADDING);
             let inner_margin = frame.total_margin().sum().x;
             frame.show(ui, |ui| {

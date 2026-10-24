@@ -43,7 +43,7 @@ Client-side only. The map is built from the chunks your game has already loaded.
 
 ## Installation
 
-Requires the client build of [LeviLamina](https://github.com/LiteLDev/LeviLamina) and [Alaydriem's Mod Manager](https://github.com/alaydriem/levi-crates).
+Requires the client build of [LeviLamina](https://github.com/LiteLDev/LeviLamina) and [Alaydriem's Mod Manager](https://github.com/alaydriem/levi-modmanager).
 
 ```powershell
 lip install github.com/alaydriem/levi-minimap#client

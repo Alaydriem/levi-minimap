@@ -83,6 +83,7 @@ dependencies = [
  "egui",
  "hcl-edit",
  "hcl-rs",
+ "png",
  "serde",
  "thiserror",
 ]
@@ -1017,6 +1018,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "levi-rules"
+version = "0.1.0"
+
+[[package]]
 name = "levi-ui"
 version = "0.1.0"
 dependencies = [
@@ -1217,6 +1222,7 @@ dependencies = [
  "egui",
  "levi-i18n",
  "levi-i18n-tool",
+ "levi-rules",
  "levi-ui",
  "minimap-core",
  "minimap-ui",

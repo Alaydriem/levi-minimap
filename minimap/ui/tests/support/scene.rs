@@ -1,7 +1,7 @@
 use minimap_core::services::ui::{MapUi, WaypointFilter};
 use minimap_core::services::waypoints::WaypointStore;
 use minimap_core::structs::draw::{DrawList, MapLayer};
-use minimap_core::structs::ui::{HintKeys, MapAction, UiFrame};
+use minimap_core::structs::ui::{HintKeys, HoverInfo, MapAction, UiFrame};
 use minimap_core::structs::view::ViewState;
 use minimap_core::structs::waypoint::{Waypoint, WaypointSource};
 use minimap_ui::map::LayerTextures;
@@ -20,6 +20,8 @@ pub struct Scene {
     pub waypoints: Vec<Waypoint>,
     pub rows: Vec<usize>,
     pub dim: i32,
+    // what is under the cursor; none by default
+    pub hover: Option<HoverInfo<'static>>,
     pub mesh: PassOutput,
     pub actions: Vec<MapAction>,
 }
@@ -58,6 +60,7 @@ impl Scene {
             waypoints,
             rows,
             dim: 0,
+            hover: None,
             mesh: PassOutput::new(),
             actions: Vec::new(),
         }
@@ -77,7 +80,7 @@ impl Scene {
             in_dimension: WaypointFilter::count_in(&self.waypoints, self.dim),
             player_block: Self::PLAYER,
             dim: self.dim,
-            hover: None,
+            hover: self.hover,
             keys: HintKeys { toggle: "M" },
         };
         let input = Frames::input(cursor, left_down, events);
@@ -98,6 +101,11 @@ impl Scene {
         let found = self.mesh.text_rects.iter().rev().find(|t| self.mesh.text_of(t) == text);
         let rect = found.map(|t| t.rect).unwrap_or_else(|| panic!("{text} not drawn"));
         ((rect[0] + rect[2]) * 0.5, (rect[1] + rect[3]) * 0.5)
+    }
+
+    pub fn right_of(&self, text: &str) -> f32 {
+        let found = self.mesh.text_rects.iter().rev().find(|t| self.mesh.text_of(t) == text);
+        found.map(|t| t.rect[2]).unwrap_or_else(|| panic!("{text} not drawn"))
     }
 
     // moves onto `text`, presses and releases; returns the actions of the release frame

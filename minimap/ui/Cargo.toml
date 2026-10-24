@@ -19,6 +19,7 @@ levi-i18n.workspace = true
 [dev-dependencies]
 minimap-ui = { path = ".", features = ["test-support"] }
 levi-i18n-tool.workspace = true
+levi-rules.workspace = true
 
 [[test]]
 name = "integration"
