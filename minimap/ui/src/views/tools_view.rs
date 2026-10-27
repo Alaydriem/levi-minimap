@@ -5,14 +5,14 @@ use levi_ui::font::FontFace;
 use levi_ui::icon::{Icon, IconSize};
 use levi_ui::tokens::rule::Elevation;
 use levi_ui::tokens::{ColorToken, SpacingToken, color, spacing};
-use levi_ui::widget::{Surface, SurfaceLevel};
+use levi_ui::widget::{SectionHeader, Surface, SurfaceLevel};
 use minimap_core::services::draw::OverlayGate;
 use minimap_core::services::ui::DimensionName;
 use minimap_core::structs::ui::{MapAction, UiFrame};
 
 use crate::id::MinimapUiId;
 use crate::message::MinimapMessage;
-use crate::views::{Caption, HoverView, SplitRow, ToggleRow, Words};
+use crate::views::{HoverView, SplitRow, ToggleRow, Words};
 
 // the top-left card: the dimension, the overlay switches, the waypoint list switch and what is
 // under the cursor
@@ -41,7 +41,7 @@ impl ToolsView {
                 ui.set_width(inner);
                 Self::header(ui, frame.dim);
                 ui.add_space(small);
-                Caption::show(ui, &Text::message(MinimapMessage::Overlays));
+                SectionHeader::new(Text::message(MinimapMessage::Overlays)).show(ui);
                 let gated = !OverlayGate::open(frame.view.zoom);
                 let note = gated.then(|| Text::message(MinimapMessage::ZoomIn));
                 let mut grid = frame.view.show_chunk_grid;
@@ -60,7 +60,7 @@ impl ToolsView {
                 ui.add_space(small);
                 ui.separator();
                 ui.add_space(small);
-                Caption::show(ui, &Text::message(MinimapMessage::UnderCursor));
+                SectionHeader::new(Text::message(MinimapMessage::UnderCursor)).show(ui);
                 HoverView::show(ui, frame.hover);
             });
         });

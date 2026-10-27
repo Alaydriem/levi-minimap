@@ -6,6 +6,8 @@ members = ["minimap/core", "minimap/store", "minimap/ui", "minimap/runtime", "mi
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.98"
+authors = ["Charles R. Portwood II"]
+license = "BSD-3-Clause"
 publish = false
 
 [workspace.dependencies]
@@ -29,14 +31,14 @@ minimap-ui = { path = "minimap/ui" }
 minimap-link = { path = "minimap/link" }
 hcl-rs = "=0.19.8"
 curia = "=0.2.2"
-amm-abi = { path = "../levi-modmanager/crates/amm-abi" }
-amm-client = { path = "../levi-modmanager/crates/amm-client" }
-amm-core = { path = "../levi-modmanager/crates/amm-core" }
-amm-ffi = { path = "../levi-modmanager/crates/amm-ffi" }
-levi-ui = { path = "../levi-crates/crates/levi-ui" }
-levi-i18n = { path = "../levi-crates/crates/levi-i18n" }
-levi-i18n-tool = { path = "../levi-crates/crates/levi-i18n-tool" }
-levi-rules = { path = "../levi-crates/crates/levi-rules" }
+amm-abi = { git = "https://github.com/Alaydriem/levi-modmanager", tag = "v1.0.0" }
+amm-client = { git = "https://github.com/Alaydriem/levi-modmanager", tag = "v1.0.0" }
+amm-core = { git = "https://github.com/Alaydriem/levi-modmanager", tag = "v1.0.0" }
+amm-ffi = { git = "https://github.com/Alaydriem/levi-modmanager", tag = "v1.0.0" }
+levi-ui = { git = "https://github.com/Alaydriem/levi-crates", tag = "v1.0.0" }
+levi-i18n = { git = "https://github.com/Alaydriem/levi-crates", tag = "v1.0.0" }
+levi-i18n-tool = { git = "https://github.com/Alaydriem/levi-crates", tag = "v1.0.0" }
+levi-rules = { git = "https://github.com/Alaydriem/levi-crates", tag = "v1.0.0" }
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

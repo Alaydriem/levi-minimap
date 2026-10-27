@@ -33,7 +33,10 @@ run = "cargo run -q -p minimap-ui --example minimap_i18n_extract -- --check"
 [tasks."i18n:pseudo"]
 description = "Writes the en_XA pseudo-locale pack of minimap.pot into minimap/ui/i18n/packs/en_XA.json"
 dir = "{{config_root}}"
-run = "cargo run -q --manifest-path ../levi-crates/Cargo.toml -p levi-i18n-tool -- pseudo minimap/ui/i18n/minimap.pot minimap/ui/i18n/packs/en_XA.json"
+run = [
+  "cargo install -q --locked --git https://github.com/Alaydriem/levi-crates --tag v1.0.0 levi-i18n-tool",
+  "levi-i18n-tool pseudo minimap/ui/i18n/minimap.pot minimap/ui/i18n/packs/en_XA.json",
+]
 
 [tasks.header]
 description = "Regenerates shim/include/levi_minimap.h from the minimap-ffi crate"

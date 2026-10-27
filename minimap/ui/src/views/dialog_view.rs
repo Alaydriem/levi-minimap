@@ -11,7 +11,7 @@ use levi_ui::tokens::rule::Elevation;
 use levi_ui::tokens::selector::AxisColor;
 use levi_ui::tokens::{ColorToken, ContainerToken, SpacingToken, color, container, spacing};
 use levi_ui::widget::{
-    ButtonKind, IconButton, IconButtonSize, Surface, SurfaceLevel, TextButton, TextField, TextFieldKind,
+    ButtonKind, IconButton, IconButtonSize, SectionHeader, Surface, SurfaceLevel, TextButton, TextField, TextFieldKind,
 };
 use minimap_core::services::waypoints::WaypointStore;
 use minimap_core::structs::ui::{DialogTarget, MapAction, WaypointDialog};
@@ -19,7 +19,7 @@ use minimap_core::structs::ui::{DialogTarget, MapAction, WaypointDialog};
 use crate::id::MinimapUiId;
 use crate::message::MinimapMessage;
 use crate::runtime::UiDrafts;
-use crate::views::{Caption, ListView, SplitRow, ToggleRow, Words};
+use crate::views::{ListView, SplitRow, ToggleRow, Words};
 
 // the waypoint dialog over a dimmed map: the name, the colour, the two minimap switches, the
 // position, Cancel and Save. Enter saves and Escape cancels, in order with the typed text
@@ -50,13 +50,13 @@ impl DialogView {
                 ui.set_width(<container::Dialog as ContainerToken>::VALUE - inner_margin);
                 Self::title(ui, dialog, actions);
                 ui.add_space(medium);
-                Caption::show(ui, &Text::message(MinimapMessage::Name));
+                SectionHeader::new(Text::message(MinimapMessage::Name)).show(ui);
                 Self::name(ui, drafts, opened);
                 ui.add_space(medium);
-                Caption::show(ui, &Text::message(MinimapMessage::Colour));
+                SectionHeader::new(Text::message(MinimapMessage::Colour)).show(ui);
                 Self::swatches(ui, dialog.colour, actions);
                 ui.add_space(medium);
-                Caption::show(ui, &Text::message(MinimapMessage::OnTheMinimap));
+                SectionHeader::new(Text::message(MinimapMessage::OnTheMinimap)).show(ui);
                 let mut edge = dialog.show_on_edge;
                 if ToggleRow::new(Text::message(MinimapMessage::ArrowAtEdge), &mut edge).show(ui) {
                     actions.push(MapAction::DialogEdge);
@@ -66,7 +66,7 @@ impl DialogView {
                     actions.push(MapAction::DialogDistance);
                 }
                 ui.add_space(medium);
-                Caption::show(ui, &Text::message(MinimapMessage::Position));
+                SectionHeader::new(Text::message(MinimapMessage::Position)).show(ui);
                 ui.label(Self::position(dialog.position, &UiLocale::get(ui.ctx())));
                 ui.add_space(<spacing::L as SpacingToken>::VALUE);
                 Self::buttons(ui, actions);

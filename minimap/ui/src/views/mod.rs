@@ -1,4 +1,3 @@
-pub mod caption;
 pub mod dialog_view;
 pub mod hint_view;
 pub mod hover_view;
@@ -11,7 +10,6 @@ pub mod toggle_row;
 pub mod tools_view;
 pub mod words;
 
-pub use caption::Caption;
 pub use dialog_view::DialogView;
 pub use hint_view::HintView;
 pub use hover_view::HoverView;

@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./assets/readme.png" alt="Mini Map" width="256">
+
 # Alaydriem's Mini Map
 
 [![Release](https://img.shields.io/github/v/release/alaydriem/levi-minimap?include_prereleases)](https://github.com/alaydriem/levi-minimap/releases)
@@ -127,6 +129,6 @@ mise run test
 
 ## License
 
-BSD 3-Clause. See [LICENSE](./LICENSE). [Nordwand Mono](https://github.com/tywr/Nordwand-Mono) is under the SIL Open Font License 1.1.
+BSD 3-Clause. Copyright (c) 2026 Charles R. Portwood II. See [LICENSE](./LICENSE). [Nordwand Mono](https://github.com/tywr/Nordwand-Mono) is under the SIL Open Font License 1.1.
 
 Inspired by [CoralMap](https://github.com/CoralFans-Dev/CoralMap).
